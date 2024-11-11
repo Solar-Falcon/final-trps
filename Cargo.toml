@@ -1,0 +1,15 @@
+[package]
+name = "final-trps"
+version = "0.1.0"
+authors = ["Solar-Falcon"]
+edition = "2021"
+license = "MIT"
+
+[dependencies]
+anyhow = "1.0"
+bstr = "1.10"
+fastrand = "2.1"
+regex-syntax = "0.8"
+regex = "1.11"
+
+eframe = "0.29"
