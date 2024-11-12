@@ -19,10 +19,14 @@ fn main() {
         ..Default::default()
     };
 
-    match eframe::run_native("patpo", native_options, Box::new(|cc| match AppGui::new(cc) {
-        Ok(app) => Ok(Box::new(app)),
-        Err(error) => Err(format!("{error}").into()),
-    })) {
+    match eframe::run_native(
+        "patpo",
+        native_options,
+        Box::new(|cc| match AppGui::new(cc) {
+            Ok(app) => Ok(Box::new(app)),
+            Err(error) => Err(format!("{error}").into()),
+        }),
+    ) {
         Ok(()) => {}
         Err(error) => {
             eprintln!("{error}");

@@ -8,8 +8,15 @@ license = "MIT"
 [dependencies]
 anyhow = "1.0"
 bstr = "1.10"
+# crossbeam-utils = "0.8"
 fastrand = "2.1"
 regex-syntax = "0.8"
 regex = "1.11"
 
 eframe = "0.29"
+
+[profile.dev]
+opt-level = 1
+
+[profile.dev.package.'*']
+opt-level = 3
