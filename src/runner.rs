@@ -1,21 +1,43 @@
-use crate::communicator::Communicator;
+use crate::{
+    communicator::Communicator,
+    gui::{SharedWorkState, TestingData},
+};
 use anyhow::Result;
 use bstr::BString;
 use regex::bytes::Regex;
 use regex_syntax::hir::Hir;
-use std::{process::Command, rc::Rc};
+use std::{
+    process::Command,
+    sync::{
+        mpsc::{Receiver, SyncSender},
+        Arc,
+    },
+};
 
-#[derive(Debug)]
-pub struct Runner {
-    pub successes_required: u32,
-    pub operations: Vec<Operation>,
-    pub command: Command,
+#[inline]
+pub fn working_thread(
+    work_state: Arc<SharedWorkState>,
+    work_receiver: Receiver<TestingData>,
+    result_sender: SyncSender<RunResult>,
+) -> impl FnOnce() + Send + 'static {
+    move || {
+        while let Ok(testing_data) = work_receiver.recv() {
+            println!("work: {:?}", &testing_data);
+
+            let result = run(testing_data, &work_state);
+
+            if result_sender.send(result).is_err() {
+                // result channel disconnected => main thread died
+                break;
+            }
+        }
+
+        // work channel disconnected => main thread died
+    }
 }
 
-impl Runner {
-    pub fn run_all(&mut self) {
-        todo!()
-    }
+fn run(testing_data: TestingData, work_state: &Arc<SharedWorkState>) -> RunResult {
+    todo!()
 }
 
 #[derive(Debug)]
@@ -31,7 +53,9 @@ impl<'a> SingleRunData<'a> {
         for op in self.operations.iter() {
             if !op.exec(&mut comm)? {
                 // TODO: we failed and now we reduce and do again right now
-                return Ok(RunResult::Failure { ops: self.operations.clone() });
+                return Ok(RunResult::Failure {
+                    history: comm.history,
+                });
             }
         }
 
@@ -58,7 +82,7 @@ impl Operation {
             Self::Output { validation } => {
                 let text = comm.read_line()?;
 
-                Ok(validation.validate(text))
+                Ok(validation.validate(&text))
             }
         }
     }
@@ -66,15 +90,17 @@ impl Operation {
 
 #[derive(Clone, Debug)]
 pub enum Rules {
-    Plain(Rc<String>),
-    Regex(Rc<Hir>),
+    Empty,
+    Plain(Arc<String>),
+    Regex(Arc<Hir>),
 }
 
 impl Rules {
     #[inline]
-    pub fn generate(&self) -> BString {
+    pub fn generate(&self) -> Arc<BString> {
         match self {
-            Self::Plain(text) => BString::from(text.as_bytes()),
+            Self::Empty => panic!("maybe later"),
+            Self::Plain(text) => Arc::new(BString::from(text.as_bytes())),
             Self::Regex(hir) => {
                 todo!("call to generator")
             }
@@ -84,14 +110,16 @@ impl Rules {
 
 #[derive(Clone, Debug)]
 pub enum Validation {
-    Plain(Rc<String>),
-    Regex(Rc<Regex>),
+    Empty,
+    Plain(Arc<String>),
+    Regex(Arc<Regex>),
 }
 
 impl Validation {
     #[inline]
-    fn validate(&self, text: BString) -> bool {
+    fn validate(&self, text: &BString) -> bool {
         match self {
+            Self::Empty => panic!("maybe later"),
             Self::Plain(correct) => text == correct.as_bytes(),
             Self::Regex(regex) => regex.is_match(text.as_slice()),
         }
@@ -101,9 +129,7 @@ impl Validation {
 #[derive(Debug)]
 pub enum RunResult {
     Success,
-    Failure {
-        ops: Vec<Operation>,
-    },
+    Failure { history: Vec<Arc<BString>> }, // TODO: add communicator's history
     Error(anyhow::Error),
 }
 

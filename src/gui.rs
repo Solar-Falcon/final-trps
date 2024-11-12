@@ -1,10 +1,11 @@
+use crate::runner::{self, RunResult};
 use anyhow::Result;
 use eframe::{egui, App};
 use std::{
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
-        mpsc::{self, SyncSender},
+        mpsc::{self, Receiver, SyncSender},
         Arc,
     },
     thread,
@@ -17,7 +18,6 @@ pub struct TestingData {
     pub args: Vec<Argument>,
     pub use_prev_errors: bool,
     pub successes_required: u32,
-    pub work_state: Arc<SharedWorkState>,
 }
 
 #[derive(Debug, Default)]
@@ -25,6 +25,7 @@ pub struct SharedWorkState {
     solved_tests: AtomicU32,
     required_tests: AtomicU32,
     stop_requested: AtomicBool,
+    finished: AtomicBool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
@@ -84,6 +85,7 @@ impl UiData {
 pub struct AppGui {
     work_state: Arc<SharedWorkState>,
     work_sender: SyncSender<TestingData>,
+    result_receiver: Receiver<RunResult>,
     state: AppState,
     program: Option<PathBuf>,
 
@@ -94,24 +96,13 @@ impl AppGui {
     pub fn new(cc: &eframe::CreationContext) -> Result<Self> {
         let work_state = Arc::new(SharedWorkState::default());
         let (work_sender, work_receiver) = mpsc::sync_channel::<TestingData>(0);
+        let (result_sender, result_receiver) = mpsc::sync_channel::<RunResult>(0);
 
-        thread::spawn(move || {
-            while let Ok(work) = work_receiver.recv() {
-                println!("'send' work to runner mod\nwork: {:?}", &work);
-
-                println!(
-                    "program output: {:?}",
-                    std::process::Command::new(work.program_path)
-                        .arg("Hello world")
-                        .output()
-                        .map(|bytes| String::from_utf8_lossy(&bytes.stdout).into_owned())
-                );
-
-                eprintln!("TODO!!!");
-            }
-
-            // if recv() returns Err(), the channel is disconnected => main thread has finished
-        });
+        thread::spawn(runner::working_thread(
+            work_state.clone(),
+            work_receiver,
+            result_sender,
+        ));
 
         // default is too small on linux
         cc.egui_ctx.set_zoom_factor(2.0);
@@ -119,6 +110,7 @@ impl AppGui {
         Ok(Self {
             work_state,
             work_sender,
+            result_receiver,
             program: None,
             state: AppState::Idle,
 
@@ -139,7 +131,6 @@ impl AppGui {
             args: self.ui.args.clone(),
             use_prev_errors: self.ui.use_prev_errors,
             successes_required: self.ui.successes_required,
-            work_state: self.work_state.clone(),
         }
     }
 
@@ -211,6 +202,8 @@ impl AppGui {
             }
         });
 
+        ui.separator();
+
         ui.horizontal(|ui| {
             egui::ComboBox::from_label("Выбрать аргумент программы").show_index(
                 ui,
@@ -236,21 +229,27 @@ impl AppGui {
         if self.ui.arg_cursor < self.ui.args.len() {
             let arg = &mut self.ui.args[self.ui.arg_cursor];
 
-            ui.label("Название аргумента:");
-            ui.text_edit_singleline(&mut arg.name);
+            ui.horizontal(|ui| {
+                ui.label("Название аргумента: ");
+                ui.text_edit_singleline(&mut arg.name);
+            });
 
-            ui.label("Тип аргумента:");
-            ui.radio_value(&mut arg.arg_type, ArgType::Input, "Входной");
-            ui.radio_value(&mut arg.arg_type, ArgType::Output, "Выходной");
+            ui.horizontal(|ui| {
+                ui.label("Тип аргумента: ");
+                ui.radio_value(&mut arg.arg_type, ArgType::Input, "Входной");
+                ui.radio_value(&mut arg.arg_type, ArgType::Output, "Выходной");
+            });
 
-            ui.label("Тип содержания:");
-            ui.radio_value(&mut arg.content_type, ContentType::Empty, "Пустой");
-            ui.radio_value(&mut arg.content_type, ContentType::Plain, "Текст");
-            ui.radio_value(
-                &mut arg.content_type,
-                ContentType::Regex,
-                "Регулярное выражение",
-            );
+            ui.horizontal(|ui| {
+                ui.label("Тип содержания: ");
+                ui.radio_value(&mut arg.content_type, ContentType::Empty, "Пустой");
+                ui.radio_value(&mut arg.content_type, ContentType::Plain, "Текст");
+                ui.radio_value(
+                    &mut arg.content_type,
+                    ContentType::Regex,
+                    "Регулярное выражение",
+                );
+            });
 
             match arg.content_type {
                 ContentType::Empty => {}
@@ -286,7 +285,7 @@ impl AppGui {
             let testing_data = self.collect_testing_data();
             self.work_sender
                 .send(testing_data)
-                .expect("TODO: fatal err handling (worker thread died) -- add a new AppState");
+                .expect("fatal error (worker thread died) -- TODO: add a new AppState");
 
             thread::sleep(Duration::from_secs_f32(0.35));
 
@@ -313,9 +312,20 @@ impl AppGui {
             .text(format!("Прогресс: {}/{}", tests_solved, tests_required));
 
         ui.add(progress_bar);
+
+        if self.work_state.finished.load(Ordering::Acquire) {
+            self.state = AppState::Finished;
+        }
     }
 
     fn ui_footer_finished(&mut self, ui: &mut egui::Ui) {
+        let result = self
+            .result_receiver
+            .recv()
+            .expect("fatal error (worker thread died) -- TODO: add a new AppState");
+
+        // TODO: render results
+
         self.ui_start_button(ui);
     }
 }
