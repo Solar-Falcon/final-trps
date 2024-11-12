@@ -1,7 +1,6 @@
 use anyhow::Result;
 use eframe::{egui, App};
 use std::{
-    mem::swap,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
@@ -67,6 +66,21 @@ struct UiData {
     args: Vec<Argument>,
 }
 
+impl UiData {
+    #[inline]
+    fn shift_cursor_up(&mut self) {
+        self.arg_cursor = self.arg_cursor.saturating_sub(1);
+    }
+
+    #[inline]
+    fn shift_cursor_down(&mut self) {
+        self.arg_cursor = self
+            .arg_cursor
+            .saturating_add(1)
+            .min(self.args.len().saturating_sub(1));
+    }
+}
+
 pub struct AppGui {
     work_state: Arc<SharedWorkState>,
     work_sender: SyncSender<TestingData>,
@@ -100,7 +114,7 @@ impl AppGui {
         });
 
         // default is too small on linux
-        cc.egui_ctx.set_zoom_factor(1.75);
+        cc.egui_ctx.set_zoom_factor(2.0);
 
         Ok(Self {
             work_state,
@@ -129,7 +143,7 @@ impl AppGui {
         }
     }
 
-    fn ui(&mut self, ui: &mut egui::Ui) {
+    fn ui_main(&mut self, ui: &mut egui::Ui) {
         egui::warn_if_debug_build(ui);
 
         ui.label(
@@ -159,7 +173,7 @@ impl AppGui {
 
             let slider = egui::Slider::new(&mut self.ui.successes_required, 1..=u32::MAX)
                 .text("Требуемое количество успешных тестов")
-                .logarithmic(false)
+                .logarithmic(true)
                 .integer();
 
             ui.add(slider);
@@ -181,32 +195,46 @@ impl AppGui {
     fn ui_argument_list(&mut self, ui: &mut egui::Ui) {
         ui.label("Аргументы программы");
 
-        if ui.button("Добавить аргумент в конец").clicked() {
-            self.ui.args.push(Default::default());
-            self.ui.arg_cursor = self.ui.args.len() - 1; // cursor on the new argument
-        }
+        ui.horizontal(|ui| {
+            if ui.button("Добавить в конец").clicked() {
+                self.ui.args.push(Default::default());
+                self.ui.arg_cursor = self.ui.args.len() - 1; // cursor on the new argument
+            }
 
-        egui::ComboBox::from_label("Выбрать аргумент программы").show_index(
-            ui,
-            &mut self.ui.arg_cursor,
-            self.ui.args.len(),
-            |i| {
-                self.ui
-                    .args
-                    .get(i)
-                    .map(|arg| arg.name.as_str())
-                    .unwrap_or("Ничего нет!")
-            },
-        );
+            if ui.button("Добавить после текущего").clicked() {
+                self.ui.arg_cursor += 1;
+                self.ui.args.insert(self.ui.arg_cursor, Default::default());
+            }
 
-        let args_len = self.ui.args.len();
-        if let Some(arg) = self.ui.args.get_mut(self.ui.arg_cursor) {
+            if ui.button("Добавить перед текущим").clicked() {
+                self.ui.args.insert(self.ui.arg_cursor, Default::default());
+            }
+        });
+
+        ui.horizontal(|ui| {
+            egui::ComboBox::from_label("Выбрать аргумент программы").show_index(
+                ui,
+                &mut self.ui.arg_cursor,
+                self.ui.args.len(),
+                |i| {
+                    self.ui
+                        .args
+                        .get(i)
+                        .map(|arg| arg.name.as_str())
+                        .unwrap_or("Ничего нет!")
+                },
+            );
+
             if ui.button("Вверх").clicked() {
-                self.ui.arg_cursor = self.ui.arg_cursor.saturating_sub(1);
+                self.ui.shift_cursor_up();
             }
             if ui.button("Вниз").clicked() {
-                self.ui.arg_cursor = self.ui.arg_cursor.saturating_add(1).min(args_len.saturating_sub(1));
+                self.ui.shift_cursor_down();
             }
+        });
+
+        if self.ui.arg_cursor < self.ui.args.len() {
+            let arg = &mut self.ui.args[self.ui.arg_cursor];
 
             ui.label("Название аргумента:");
             ui.text_edit_singleline(&mut arg.name);
@@ -231,8 +259,24 @@ impl AppGui {
                 }
             }
 
-            // add after/before
-            // shift up/down
+            ui.horizontal(|ui| {
+                let current = self.ui.arg_cursor;
+
+                if ui.button("Сдвинуть вниз").clicked() {
+                    self.ui.shift_cursor_down();
+                    self.ui.args.swap(current, self.ui.arg_cursor);
+                }
+
+                if ui.button("Сдвинуть вверх").clicked() {
+                    self.ui.shift_cursor_up();
+                    self.ui.args.swap(current, self.ui.arg_cursor);
+                }
+
+                if ui.button("Удалить").clicked() {
+                    self.ui.args.remove(current);
+                    self.ui.shift_cursor_up(); // if we remove the last arg, cursor points to nothing
+                }
+            });
         }
     }
 
@@ -244,7 +288,7 @@ impl AppGui {
                 .send(testing_data)
                 .expect("TODO: fatal err handling (worker thread died) -- add a new AppState");
 
-            thread::sleep(Duration::from_secs_f32(0.3));
+            thread::sleep(Duration::from_secs_f32(0.35));
 
             self.state = AppState::Working;
         }
@@ -282,7 +326,7 @@ impl App for AppGui {
 
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
-                self.ui(ui);
+                self.ui_main(ui);
             });
         });
     }
