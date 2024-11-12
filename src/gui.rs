@@ -1,6 +1,7 @@
 use anyhow::Result;
 use eframe::{egui, App};
 use std::{
+    mem::swap,
     path::PathBuf,
     sync::{
         atomic::{AtomicBool, AtomicU32, Ordering},
@@ -9,7 +10,6 @@ use std::{
     },
     thread,
     time::Duration,
-    mem::swap,
 };
 
 #[derive(Debug)]
@@ -183,6 +183,7 @@ impl AppGui {
 
         if ui.button("Добавить аргумент в конец").clicked() {
             self.ui.args.push(Default::default());
+            self.ui.arg_cursor = self.ui.args.len() - 1; // cursor on the new argument
         }
 
         egui::ComboBox::from_label("Выбрать аргумент программы").show_index(
@@ -198,15 +199,30 @@ impl AppGui {
             },
         );
 
+        let args_len = self.ui.args.len();
         if let Some(arg) = self.ui.args.get_mut(self.ui.arg_cursor) {
-            ui.label("Тип аргумента: ");
+            if ui.button("Вверх").clicked() {
+                self.ui.arg_cursor = self.ui.arg_cursor.saturating_sub(1);
+            }
+            if ui.button("Вниз").clicked() {
+                self.ui.arg_cursor = self.ui.arg_cursor.saturating_add(1).min(args_len.saturating_sub(1));
+            }
+
+            ui.label("Название аргумента:");
+            ui.text_edit_singleline(&mut arg.name);
+
+            ui.label("Тип аргумента:");
             ui.radio_value(&mut arg.arg_type, ArgType::Input, "Входной");
             ui.radio_value(&mut arg.arg_type, ArgType::Output, "Выходной");
 
             ui.label("Тип содержания:");
             ui.radio_value(&mut arg.content_type, ContentType::Empty, "Пустой");
             ui.radio_value(&mut arg.content_type, ContentType::Plain, "Текст");
-            ui.radio_value(&mut arg.content_type, ContentType::Regex, "Регулярное выражение");
+            ui.radio_value(
+                &mut arg.content_type,
+                ContentType::Regex,
+                "Регулярное выражение",
+            );
 
             match arg.content_type {
                 ContentType::Empty => {}
@@ -226,7 +242,7 @@ impl AppGui {
             let testing_data = self.collect_testing_data();
             self.work_sender
                 .send(testing_data)
-                .expect("TODO: err handling (worker thread died) -- add a new AppState");
+                .expect("TODO: fatal err handling (worker thread died) -- add a new AppState");
 
             thread::sleep(Duration::from_secs_f32(0.3));
 
@@ -264,8 +280,10 @@ impl App for AppGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // TODO: side panel with help?
 
-        let _ = egui::CentralPanel::default().show(ctx, |ui| {
-            self.ui(ui);
+        egui::CentralPanel::default().show(ctx, |ui| {
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                self.ui(ui);
+            });
         });
     }
 

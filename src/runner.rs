@@ -13,20 +13,8 @@ pub struct Runner {
 }
 
 impl Runner {
-    pub fn run_all(&mut self) -> Result<RunResult> {
-        for _i in 0..self.successes_required {
-            let result = SingleRunData {
-                command: &mut self.command,
-                operations: &self.operations,
-            }
-            .run()?;
-
-            if !result.success {
-                return Ok(result);
-            }
-        }
-
-        Ok(RunResult::success())
+    pub fn run_all(&mut self) {
+        todo!()
     }
 }
 
@@ -39,20 +27,15 @@ struct SingleRunData<'a> {
 impl<'a> SingleRunData<'a> {
     fn run(self) -> Result<RunResult> {
         let mut comm = Communicator::new(self.command)?;
-        let mut inputs_so_far = Vec::new();
 
         for op in self.operations.iter() {
-            if let Operation::Input { rules } = &op {
-                inputs_so_far.push(rules.clone());
-            }
-
             if !op.exec(&mut comm)? {
                 // TODO: we failed and now we reduce and do again right now
-                return Ok(RunResult::failure(inputs_so_far));
+                return Ok(RunResult::Failure { ops: self.operations.clone() });
             }
         }
 
-        Ok(RunResult::success())
+        Ok(RunResult::Success)
     }
 }
 
@@ -115,26 +98,21 @@ impl Validation {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct RunResult {
-    pub success: bool,
-    pub erroneous_inputs: Option<Vec<Rules>>,
+#[derive(Debug)]
+pub enum RunResult {
+    Success,
+    Failure {
+        ops: Vec<Operation>,
+    },
+    Error(anyhow::Error),
 }
 
-impl RunResult {
+impl From<Result<Self>> for RunResult {
     #[inline]
-    fn success() -> Self {
-        Self {
-            success: true,
-            erroneous_inputs: None,
-        }
-    }
-
-    #[inline]
-    fn failure(inputs: Vec<Rules>) -> Self {
-        Self {
-            success: false,
-            erroneous_inputs: Some(inputs),
+    fn from(value: Result<Self>) -> Self {
+        match value {
+            Ok(this) => this,
+            Err(error) => Self::Error(error),
         }
     }
 }
