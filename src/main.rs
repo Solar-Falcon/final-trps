@@ -1,10 +1,13 @@
-use eframe::{egui::ViewportBuilder, NativeOptions};
+use eframe::{
+    egui::{Vec2, ViewportBuilder},
+    NativeOptions,
+};
 use gui::AppGui;
 
 pub mod communicator;
+pub mod converter;
 pub mod generator;
 pub mod gui;
-pub mod parser;
 pub mod runner;
 
 pub const PERSISTANCE_FILE_NAME: &str = "errors.txt";
@@ -14,8 +17,10 @@ fn main() {
         viewport: ViewportBuilder {
             title: Some("Программа автоматизации тестирования ПО".to_owned()),
             drag_and_drop: Some(true),
+            min_inner_size: Some(Vec2::new(400.0, 400.0)),
             ..Default::default()
         },
+
         ..Default::default()
     };
 

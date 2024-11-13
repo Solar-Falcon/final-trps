@@ -1,10 +1,13 @@
 use anyhow::{Error, Result};
-use bstr::BString;
+use bstr::{BString, ByteSlice};
 use std::{
     io::{BufRead, BufReader, Write},
     process::{Child, Command},
     sync::Arc,
 };
+
+// TODO: reruns
+// TODO: dedicated history type (w/ input/output and possibility of rerun)
 
 pub struct Communicator {
     process: Child,
@@ -25,12 +28,12 @@ impl Communicator {
             .process
             .stdout
             .as_mut()
-            .ok_or(Error::msg("program stdout unavailable (TODO: better msg)"))?;
+            .ok_or(Error::msg("program stdout unavailable"))?;
 
         let mut buffer = Vec::new();
         BufReader::new(stdout).read_until(b'\n', &mut buffer)?;
 
-        let string = Arc::new(BString::new(buffer));
+        let string = Arc::new(BString::from(buffer.as_bstr().trim_end()));
         self.history.push(string.clone());
 
         Ok(string)
@@ -41,9 +44,10 @@ impl Communicator {
             .process
             .stdin
             .as_mut()
-            .ok_or(Error::msg("program stdin unavailable (TODO: better msg)"))?;
+            .ok_or(Error::msg("program stdin unavailable"))?;
 
         stdin.write_all(line)?;
+        stdin.write_all(b"\n")?;
 
         self.history.push(line.clone());
 

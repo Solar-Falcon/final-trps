@@ -1,6 +1,9 @@
-use crate::runner::{self, RunResult};
+use crate::runner::{self, ArgType, Argument, ContentType, RunResult, TestingData};
 use anyhow::Result;
-use eframe::{egui, App};
+use eframe::{
+    egui::{self, Color32},
+    App,
+};
 use std::{
     path::PathBuf,
     sync::{
@@ -12,43 +15,19 @@ use std::{
     time::Duration,
 };
 
-#[derive(Debug)]
-pub struct TestingData {
-    pub program_path: PathBuf,
-    pub args: Vec<Argument>,
-    pub use_prev_errors: bool,
-    pub successes_required: u32,
-}
-
 #[derive(Debug, Default)]
 pub struct SharedWorkState {
-    solved_tests: AtomicU32,
-    required_tests: AtomicU32,
-    stop_requested: AtomicBool,
-    finished: AtomicBool,
+    pub solved_tests: AtomicU32,
+    pub required_tests: AtomicU32,
+    pub stop_requested: AtomicBool,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
-pub enum ArgType {
-    #[default]
-    Input,
-    Output,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
-pub enum ContentType {
-    #[default]
-    Empty,
-    Plain,
-    Regex,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Argument {
-    pub name: String,
-    pub arg_type: ArgType,
-    pub content_type: ContentType,
-    pub text: String,
+impl SharedWorkState {
+    pub fn reset(&self) {
+        self.solved_tests.store(0, Ordering::Release);
+        self.required_tests.store(0, Ordering::Release);
+        self.stop_requested.store(false, Ordering::Release);
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -88,6 +67,7 @@ pub struct AppGui {
     result_receiver: Receiver<RunResult>,
     state: AppState,
     program: Option<PathBuf>,
+    last_result: Option<RunResult>,
 
     ui: UiData,
 }
@@ -113,6 +93,7 @@ impl AppGui {
             result_receiver,
             program: None,
             state: AppState::Idle,
+            last_result: None,
 
             ui: UiData {
                 program_path_input: String::new(),
@@ -273,7 +254,7 @@ impl AppGui {
 
                 if ui.button("Удалить").clicked() {
                     self.ui.args.remove(current);
-                    self.ui.shift_cursor_up(); // if we remove the last arg, cursor points to nothing
+                    self.ui.shift_cursor_up(); // when we remove the last arg, cursor points to nothing
                 }
             });
         }
@@ -285,7 +266,7 @@ impl AppGui {
             let testing_data = self.collect_testing_data();
             self.work_sender
                 .send(testing_data)
-                .expect("fatal error (worker thread died) -- TODO: add a new AppState");
+                .expect("fatal error (worker thread died) -- TODO: restart thread");
 
             thread::sleep(Duration::from_secs_f32(0.35));
 
@@ -313,18 +294,45 @@ impl AppGui {
 
         ui.add(progress_bar);
 
-        if self.work_state.finished.load(Ordering::Acquire) {
-            self.state = AppState::Finished;
+        match self.result_receiver.try_recv() {
+            Ok(result) => {
+                self.last_result = Some(result);
+                self.state = AppState::Finished;
+            }
+            Err(mpsc::TryRecvError::Disconnected) => {
+                // worker thread died (panic happened)
+                self.state = AppState::Idle; // < include in restart()
+                todo!("restart worker thread");
+            }
+            Err(mpsc::TryRecvError::Empty) => {}
         }
     }
 
     fn ui_footer_finished(&mut self, ui: &mut egui::Ui) {
-        let result = self
-            .result_receiver
-            .recv()
-            .expect("fatal error (worker thread died) -- TODO: add a new AppState");
+        ui.separator();
 
-        // TODO: render results
+        match self.last_result.as_mut() {
+            Some(RunResult::Success) => {
+                ui.colored_label(Color32::GREEN, "Все тесты прошли успешно");
+            }
+            Some(RunResult::Failure { history }) => {
+                ui.colored_label(Color32::DARK_RED, "Обнаружены ошибки:");
+
+                ui.label("История ввода/вывода: ");
+
+                println!("{:?}", history);
+                for s in history.iter() {
+                    ui.label(format!("{s}"));
+                }
+            }
+            Some(RunResult::Error(error)) => {
+                ui.colored_label(Color32::DARK_RED, "Возникла ошибка выполнения: ");
+                ui.label(format!("{error}"));
+            }
+            None => {
+                self.state = AppState::Idle;
+            }
+        }
 
         self.ui_start_button(ui);
     }
@@ -332,10 +340,10 @@ impl AppGui {
 
 impl App for AppGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // TODO: side panel with help?
+        // TODO: side panel with help
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::vertical().show(ui, |ui| {
+            egui::ScrollArea::both().show(ui, |ui| {
                 self.ui_main(ui);
             });
         });
