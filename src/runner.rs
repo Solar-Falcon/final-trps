@@ -54,8 +54,6 @@ pub fn working_thread(
 ) -> impl FnOnce() + Send + 'static {
     move || {
         while let Ok(testing_data) = work_receiver.recv() {
-            println!("work: {:?}", &testing_data);
-
             let result = run(testing_data, &work_state);
 
             if result_sender.send(result.into()).is_err() {

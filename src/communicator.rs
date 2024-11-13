@@ -6,8 +6,7 @@ use std::{
     sync::Arc,
 };
 
-// TODO: reruns
-// TODO: dedicated history type (w/ input/output and possibility of rerun)
+// TODO: dedicated history type (w/ input/output)
 
 pub struct Communicator {
     process: Child,

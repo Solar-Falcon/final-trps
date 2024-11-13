@@ -4,6 +4,7 @@ use eframe::{
     egui::{self, Color32},
     App,
 };
+use egui_file_dialog::FileDialog;
 use std::{
     path::PathBuf,
     sync::{
@@ -39,7 +40,6 @@ enum AppState {
 
 #[derive(Debug)]
 struct UiData {
-    program_path_input: String,
     use_prev_errors: bool,
     successes_required: u32,
     arg_cursor: usize,
@@ -66,8 +66,10 @@ pub struct AppGui {
     work_sender: SyncSender<TestingData>,
     result_receiver: Receiver<RunResult>,
     state: AppState,
-    program: Option<PathBuf>,
     last_result: Option<RunResult>,
+
+    program_file: Option<PathBuf>,
+    file_dialog: FileDialog,
 
     ui: UiData,
 }
@@ -85,18 +87,19 @@ impl AppGui {
         ));
 
         // default is too small on linux
-        cc.egui_ctx.set_zoom_factor(2.0);
+        cc.egui_ctx.set_zoom_factor(1.75);
 
         Ok(Self {
             work_state,
             work_sender,
             result_receiver,
-            program: None,
             state: AppState::Idle,
             last_result: None,
 
+            program_file: None,
+            file_dialog: FileDialog::new(),
+
             ui: UiData {
-                program_path_input: String::new(),
                 use_prev_errors: false,
                 successes_required: 1,
                 arg_cursor: 0,
@@ -108,31 +111,36 @@ impl AppGui {
     #[inline]
     fn collect_testing_data(&self) -> TestingData {
         TestingData {
-            program_path: self.program.as_ref().unwrap().clone(),
+            program_path: self.program_file.as_ref().unwrap().clone(),
             args: self.ui.args.clone(),
             use_prev_errors: self.ui.use_prev_errors,
             successes_required: self.ui.successes_required,
         }
     }
 
-    fn ui_main(&mut self, ui: &mut egui::Ui) {
+    fn ui_main(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::warn_if_debug_build(ui);
 
-        ui.label(
-            "Перенесите исполняемый файл программы сюда!\nИли введите путь к нему в поле ниже",
-        )
-        .highlight();
-
-        if ui
-            .text_edit_singleline(&mut self.ui.program_path_input)
-            .changed()
-        {
-            self.program = Some(PathBuf::from(&self.ui.program_path_input));
+        if ui.button("Выбрать исполняемый файл").clicked() {
+            self.file_dialog.select_file();
         }
 
-        if let Some(prog_path) = self.program.as_ref() {
+        self.file_dialog.update(ctx);
+
+        if let Some(path) = self.file_dialog.take_selected() {
+            self.program_file = Some(path);
+        }
+
+        if let Some(prog_path) = self.program_file.as_ref() {
             ui.separator();
             ui.label(format!("Выбран файл: {}", prog_path.display()));
+
+            if !prog_path.is_file() {
+                ui.colored_label(
+                    Color32::ORANGE,
+                    "Внимание! Выбранный файл не существует или недоступен.",
+                );
+            }
 
             ui.separator();
             self.ui_argument_list(ui);
@@ -173,13 +181,15 @@ impl AppGui {
                 self.ui.arg_cursor = self.ui.args.len() - 1; // cursor on the new argument
             }
 
-            if ui.button("Добавить после текущего").clicked() {
-                self.ui.arg_cursor += 1;
-                self.ui.args.insert(self.ui.arg_cursor, Default::default());
-            }
+            if !self.ui.args.is_empty() {
+                if ui.button("Добавить после текущего").clicked() {
+                    self.ui.arg_cursor += 1;
+                    self.ui.args.insert(self.ui.arg_cursor, Default::default());
+                }
 
-            if ui.button("Добавить перед текущим").clicked() {
-                self.ui.args.insert(self.ui.arg_cursor, Default::default());
+                if ui.button("Добавить перед текущим").clicked() {
+                    self.ui.args.insert(self.ui.arg_cursor, Default::default());
+                }
             }
         });
 
@@ -343,8 +353,8 @@ impl App for AppGui {
         // TODO: side panel with help
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            egui::ScrollArea::both().show(ui, |ui| {
-                self.ui_main(ui);
+            egui::ScrollArea::vertical().show(ui, |ui| {
+                self.ui_main(ctx, ui);
             });
         });
     }
@@ -355,7 +365,7 @@ impl App for AppGui {
             .first_mut()
             .and_then(|dropped_file| dropped_file.path.take())
         {
-            self.program = Some(path);
+            self.program_file = Some(path);
         }
     }
 }
