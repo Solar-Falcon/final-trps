@@ -143,7 +143,7 @@ impl AppGui {
             }
 
             ui.separator();
-            self.ui_argument_list(ui);
+            self.ui_argument_display(ui);
 
             ui.separator();
             ui.checkbox(
@@ -173,6 +173,20 @@ impl AppGui {
     }
 
     fn ui_argument_list(&mut self, ui: &mut egui::Ui) {
+        ui.vertical(|ui| {
+            ui.label("Список аргументов:");
+
+            for (i, arg) in self.ui.args.iter().enumerate() {
+                if i == self.ui.arg_cursor {
+                    ui.label(format!("> {} ({})", &arg.name, &arg.arg_type));
+                } else {
+                    ui.label(format!("- {} ({})", &arg.name, &arg.arg_type));
+                }
+            }
+        });
+    }
+
+    fn ui_argument_display(&mut self, ui: &mut egui::Ui) {
         ui.label("Аргументы программы");
 
         ui.horizontal(|ui| {
@@ -196,78 +210,86 @@ impl AppGui {
         ui.separator();
 
         ui.horizontal(|ui| {
-            egui::ComboBox::from_label("Выбрать аргумент программы").show_index(
-                ui,
-                &mut self.ui.arg_cursor,
-                self.ui.args.len(),
-                |i| {
-                    self.ui
-                        .args
-                        .get(i)
-                        .map(|arg| arg.name.as_str())
-                        .unwrap_or("Ничего нет!")
-                },
-            );
+            ui.vertical(|ui| {
+                ui.horizontal(|ui| {
+                    egui::ComboBox::from_label("Выбрать аргумент программы").show_index(
+                        ui,
+                        &mut self.ui.arg_cursor,
+                        self.ui.args.len(),
+                        |i| {
+                            self.ui
+                                .args
+                                .get(i)
+                                .map(|arg| arg.name.as_str())
+                                .unwrap_or("Ничего нет!")
+                        },
+                    );
 
-            if ui.button("Вверх").clicked() {
-                self.ui.shift_cursor_up();
-            }
-            if ui.button("Вниз").clicked() {
-                self.ui.shift_cursor_down();
-            }
+                    if ui.button("Вверх").clicked() {
+                        self.ui.shift_cursor_up();
+                    }
+                    if ui.button("Вниз").clicked() {
+                        self.ui.shift_cursor_down();
+                    }
+                });
+
+                if self.ui.arg_cursor < self.ui.args.len() {
+                    let arg = &mut self.ui.args[self.ui.arg_cursor];
+
+                    ui.horizontal(|ui| {
+                        ui.label("Название аргумента: ");
+                        ui.text_edit_singleline(&mut arg.name);
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Тип аргумента: ");
+                        ui.radio_value(&mut arg.arg_type, ArgType::Input, "Входной");
+                        ui.radio_value(&mut arg.arg_type, ArgType::Output, "Выходной");
+                    });
+
+                    ui.horizontal(|ui| {
+                        ui.label("Тип содержания: ");
+                        ui.radio_value(&mut arg.content_type, ContentType::Empty, "Пустой");
+                        ui.radio_value(&mut arg.content_type, ContentType::Plain, "Текст");
+                        ui.radio_value(
+                            &mut arg.content_type,
+                            ContentType::Regex,
+                            "Регулярное выражение",
+                        );
+                    });
+
+                    match arg.content_type {
+                        ContentType::Empty => {}
+                        ContentType::Plain | ContentType::Regex => {
+                            ui.text_edit_multiline(&mut arg.text);
+                        }
+                    }
+
+                    ui.horizontal(|ui| {
+                        let current = self.ui.arg_cursor;
+
+                        if ui.button("Сдвинуть вниз").clicked() {
+                            self.ui.shift_cursor_down();
+                            self.ui.args.swap(current, self.ui.arg_cursor);
+                        }
+
+                        if ui.button("Сдвинуть вверх").clicked() {
+                            self.ui.shift_cursor_up();
+                            self.ui.args.swap(current, self.ui.arg_cursor);
+                        }
+
+                        if ui.button("Удалить").clicked() {
+                            self.ui.args.remove(current);
+                            self.ui.shift_cursor_up(); // when we remove the last arg, cursor points to nothing
+                        }
+                    });
+                }
+            });
+
+            ui.separator();
+
+            self.ui_argument_list(ui);
         });
-
-        if self.ui.arg_cursor < self.ui.args.len() {
-            let arg = &mut self.ui.args[self.ui.arg_cursor];
-
-            ui.horizontal(|ui| {
-                ui.label("Название аргумента: ");
-                ui.text_edit_singleline(&mut arg.name);
-            });
-
-            ui.horizontal(|ui| {
-                ui.label("Тип аргумента: ");
-                ui.radio_value(&mut arg.arg_type, ArgType::Input, "Входной");
-                ui.radio_value(&mut arg.arg_type, ArgType::Output, "Выходной");
-            });
-
-            ui.horizontal(|ui| {
-                ui.label("Тип содержания: ");
-                ui.radio_value(&mut arg.content_type, ContentType::Empty, "Пустой");
-                ui.radio_value(&mut arg.content_type, ContentType::Plain, "Текст");
-                ui.radio_value(
-                    &mut arg.content_type,
-                    ContentType::Regex,
-                    "Регулярное выражение",
-                );
-            });
-
-            match arg.content_type {
-                ContentType::Empty => {}
-                ContentType::Plain | ContentType::Regex => {
-                    ui.text_edit_multiline(&mut arg.text);
-                }
-            }
-
-            ui.horizontal(|ui| {
-                let current = self.ui.arg_cursor;
-
-                if ui.button("Сдвинуть вниз").clicked() {
-                    self.ui.shift_cursor_down();
-                    self.ui.args.swap(current, self.ui.arg_cursor);
-                }
-
-                if ui.button("Сдвинуть вверх").clicked() {
-                    self.ui.shift_cursor_up();
-                    self.ui.args.swap(current, self.ui.arg_cursor);
-                }
-
-                if ui.button("Удалить").clicked() {
-                    self.ui.args.remove(current);
-                    self.ui.shift_cursor_up(); // when we remove the last arg, cursor points to nothing
-                }
-            });
-        }
     }
 
     #[inline]

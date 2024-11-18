@@ -6,13 +6,11 @@ use bstr::BString;
 use regex::bytes::Regex;
 use regex_syntax::hir::Hir;
 use std::{
-    path::PathBuf,
-    process::{Command, Stdio},
-    sync::{
+    fmt::Display, path::PathBuf, process::{Command, Stdio}, sync::{
         atomic::Ordering,
         mpsc::{Receiver, SyncSender},
         Arc,
-    },
+    }
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
@@ -20,6 +18,15 @@ pub enum ArgType {
     #[default]
     Input,
     Output,
+}
+
+impl Display for ArgType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Input => write!(f, "входной"),
+            Self::Output => write!(f, "выходной")
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
