@@ -24,6 +24,7 @@ pub struct SharedWorkState {
 }
 
 impl SharedWorkState {
+    #[inline]
     pub fn reset(&self) {
         self.solved_tests.store(0, Ordering::Release);
         self.required_tests.store(0, Ordering::Release);
@@ -116,6 +117,24 @@ impl AppGui {
             use_prev_errors: self.ui.use_prev_errors,
             successes_required: self.ui.successes_required,
         }
+    }
+
+    fn restart_worker_thread(&mut self) {
+        self.state = AppState::Idle;
+        self.work_state.reset();
+        self.last_result = None;
+
+        let (work_sender, work_receiver) = mpsc::sync_channel::<TestingData>(0);
+        let (result_sender, result_receiver) = mpsc::sync_channel::<RunResult>(0);
+
+        thread::spawn(runner::working_thread(
+            self.work_state.clone(),
+            work_receiver,
+            result_sender,
+        ));
+
+        self.work_sender = work_sender;
+        self.result_receiver = result_receiver;
     }
 
     fn ui_main(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
@@ -296,9 +315,11 @@ impl AppGui {
     fn ui_start_button(&mut self, ui: &mut egui::Ui) {
         if ui.button("Начать тестирование").clicked() {
             let testing_data = self.collect_testing_data();
-            self.work_sender
-                .send(testing_data)
-                .expect("fatal error (worker thread died) -- TODO: restart thread");
+
+            if self.work_sender.send(testing_data).is_err() {
+                self.restart_worker_thread();
+                return;
+            }
 
             thread::sleep(Duration::from_secs_f32(0.35));
 
@@ -333,8 +354,8 @@ impl AppGui {
             }
             Err(mpsc::TryRecvError::Disconnected) => {
                 // worker thread died (panic happened)
-                self.state = AppState::Idle; // < include in restart()
-                todo!("restart worker thread");
+                println!("worker thread died -- restarting");
+                self.restart_worker_thread();
             }
             Err(mpsc::TryRecvError::Empty) => {}
         }
@@ -353,9 +374,7 @@ impl AppGui {
                 ui.label("История ввода/вывода: ");
 
                 println!("{:?}", history);
-                for s in history.iter() {
-                    ui.label(format!("{s}"));
-                }
+                ui.label(format!("{}", history));
             }
             Some(RunResult::Error(error)) => {
                 ui.colored_label(Color32::DARK_RED, "Возникла ошибка выполнения: ");

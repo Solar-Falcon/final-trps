@@ -36,7 +36,8 @@ fn parse_input_arg(arg: &Argument) -> Result<Rules> {
         }
         ContentType::Regex => Ok(Rules::Regex(Arc::new(
             regex_syntax::ParserBuilder::new()
-                // TODO: options
+                .ignore_whitespace(true)
+                .unicode(false)
                 .build()
                 .parse(&arg.text)?,
         ))),

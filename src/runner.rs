@@ -1,5 +1,5 @@
 use crate::{
-    communicator::Communicator, converter::parse_args, generator::generate, gui::SharedWorkState,
+    communicator::{Communicator, History}, converter::parse_args, generator::generate, gui::SharedWorkState,
 };
 use anyhow::Result;
 use bstr::BString;
@@ -111,7 +111,7 @@ fn run_single(command: &mut Command, operations: &[Operation]) -> Result<RunResu
 
     for op in operations.iter() {
         if !op.exec(&mut comm)? {
-            // TODO: we failed and now we reduce and do again right now
+            // TOD: reduce
             return Ok(RunResult::Failure {
                 history: comm.history,
             });
@@ -174,7 +174,7 @@ impl Validation {
 #[derive(Debug)]
 pub enum RunResult {
     Success,
-    Failure { history: Vec<Arc<BString>> },
+    Failure { history: History },
     Error(anyhow::Error),
 }
 

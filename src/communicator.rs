@@ -1,16 +1,42 @@
 use anyhow::{Error, Result};
 use bstr::{BString, ByteSlice};
 use std::{
-    io::{BufRead, BufReader, Write},
-    process::{Child, Command},
-    sync::Arc,
+    fmt::Display, io::{BufRead, BufReader, Write}, process::{Child, Command}, sync::Arc
 };
 
-// TODO: dedicated history type (w/ input/output)
+#[derive(Clone, Debug)]
+enum Item {
+    Stdin(Arc<BString>),
+    Stdout(Arc<BString>),
+}
+
+impl Display for Item {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Stdin(inp)  => write!(f, "(ввод) | {}", inp),
+            Self::Stdout(out) => write!(f, "(вывод)| {}", out),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct History {
+    vec: Vec<Item>,
+}
+
+impl Display for History {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for item in self.vec.iter() {
+            writeln!(f, "{}", item)?;
+        }
+
+        Ok(())
+    }
+}
 
 pub struct Communicator {
     process: Child,
-    pub history: Vec<Arc<BString>>,
+    pub history: History,
 }
 
 impl Communicator {
@@ -18,7 +44,7 @@ impl Communicator {
     pub fn new(command: &mut Command) -> Result<Self> {
         Ok(Self {
             process: command.spawn()?,
-            history: Vec::new(),
+            history: History { vec: Vec::new() },
         })
     }
 
@@ -33,7 +59,7 @@ impl Communicator {
         BufReader::new(stdout).read_until(b'\n', &mut buffer)?;
 
         let string = Arc::new(BString::from(buffer.as_bstr().trim_end()));
-        self.history.push(string.clone());
+        self.history.vec.push(Item::Stdout(string.clone()));
 
         Ok(string)
     }
@@ -48,7 +74,7 @@ impl Communicator {
         stdin.write_all(line)?;
         stdin.write_all(b"\n")?;
 
-        self.history.push(line.clone());
+        self.history.vec.push(Item::Stdin(line.clone()));
 
         Ok(())
     }
