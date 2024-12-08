@@ -3,14 +3,19 @@ use eframe::{
     NativeOptions,
 };
 use gui::AppGui;
+use std::sync::LazyLock;
+use time::format_description::OwnedFormatItem;
 
 pub mod communicator;
-pub mod converter;
 pub mod generator;
 pub mod gui;
+pub mod parser;
 pub mod runner;
 
-pub const PERSISTANCE_FILE_NAME: &str = "errors.txt";
+static DATE_FORMAT: LazyLock<OwnedFormatItem> = LazyLock::new(|| {
+    time::format_description::parse_owned::<2>("[year]-[month]-[day] [hour]-[minute]-[second]")
+        .unwrap()
+});
 
 fn main() {
     let native_options = NativeOptions {

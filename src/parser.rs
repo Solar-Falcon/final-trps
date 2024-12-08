@@ -1,7 +1,18 @@
 use crate::runner::{ArgType, Argument, ContentType, Operation, Rules, Validation};
 use anyhow::Result;
+use bstr::{BString, ByteSlice};
 use regex::bytes::Regex;
 use std::sync::Arc;
+
+#[inline]
+pub fn parse_int(text: &BString) -> Option<i64> {
+    text.to_str().ok().and_then(|s| s.parse().ok())
+}
+
+#[inline]
+pub fn parse_float(text: &BString) -> Option<f64> {
+    text.to_str().ok().and_then(|s| s.parse().ok())
+}
 
 pub fn parse_args(args: &[Argument]) -> Result<Vec<Operation>> {
     let mut ops = Vec::new();
@@ -41,6 +52,7 @@ fn parse_input_arg(arg: &Argument) -> Result<Rules> {
                 .build()
                 .parse(&arg.text)?,
         ))),
+        ContentType::Int => Ok(Rules::Int(arg.min..=arg.max)),
     }
 }
 
@@ -54,5 +66,6 @@ fn parse_output_arg(arg: &Argument) -> Result<Validation> {
             Ok(Validation::Plain(Arc::new(text)))
         }
         ContentType::Regex => Ok(Validation::Regex(Arc::new(Regex::new(&arg.text)?))),
+        ContentType::Int => Ok(Validation::Int(arg.min..=arg.max)),
     }
 }

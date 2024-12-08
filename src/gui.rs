@@ -13,7 +13,6 @@ use std::{
         Arc,
     },
     thread,
-    time::Duration,
 };
 
 #[derive(Debug, Default)]
@@ -41,7 +40,6 @@ enum AppState {
 
 #[derive(Debug)]
 struct UiData {
-    use_prev_errors: bool,
     successes_required: u32,
     arg_cursor: usize,
     args: Vec<Argument>,
@@ -87,7 +85,7 @@ impl AppGui {
             result_sender,
         ));
 
-        // default is too small on linux
+        // default is too small (especially on linux)
         cc.egui_ctx.set_zoom_factor(1.75);
 
         Ok(Self {
@@ -101,7 +99,6 @@ impl AppGui {
             file_dialog: FileDialog::new(),
 
             ui: UiData {
-                use_prev_errors: false,
                 successes_required: 1,
                 arg_cursor: 0,
                 args: vec![],
@@ -114,7 +111,6 @@ impl AppGui {
         TestingData {
             program_path: self.program_file.as_ref().unwrap().clone(),
             args: self.ui.args.clone(),
-            use_prev_errors: self.ui.use_prev_errors,
             successes_required: self.ui.successes_required,
         }
     }
@@ -165,10 +161,6 @@ impl AppGui {
             self.ui_argument_display(ui);
 
             ui.separator();
-            ui.checkbox(
-                &mut self.ui.use_prev_errors,
-                "Использовать предыдущие ошибки",
-            );
 
             let slider = egui::Slider::new(&mut self.ui.successes_required, 1..=u32::MAX)
                 .text("Требуемое количество успешных тестов")
@@ -193,7 +185,16 @@ impl AppGui {
 
     fn ui_argument_list(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            ui.label("Список аргументов:");
+            ui.label("Навигация");
+
+            if ui.button("Вверх").clicked() {
+                self.ui.shift_cursor_up();
+            }
+            if ui.button("Вниз").clicked() {
+                self.ui.shift_cursor_down();
+            }
+
+            ui.separator();
 
             for (i, arg) in self.ui.args.iter().enumerate() {
                 if i == self.ui.arg_cursor {
@@ -226,31 +227,41 @@ impl AppGui {
             }
         });
 
+        let current = self.ui.arg_cursor;
+
+        ui.horizontal(|ui| {
+            if ui.button("Сдвинуть вниз").clicked() {
+                self.ui.shift_cursor_down();
+                self.ui.args.swap(current, self.ui.arg_cursor);
+            }
+
+            if ui.button("Сдвинуть вверх").clicked() {
+                self.ui.shift_cursor_up();
+                self.ui.args.swap(current, self.ui.arg_cursor);
+            }
+        });
+
+        if ui.button("Удалить").clicked() {
+            self.ui.args.remove(current);
+            self.ui.shift_cursor_up(); // when we remove the last arg, cursor points to nothing
+        }
+
         ui.separator();
 
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
-                ui.horizontal(|ui| {
-                    egui::ComboBox::from_label("Выбрать аргумент программы").show_index(
-                        ui,
-                        &mut self.ui.arg_cursor,
-                        self.ui.args.len(),
-                        |i| {
-                            self.ui
-                                .args
-                                .get(i)
-                                .map(|arg| arg.name.as_str())
-                                .unwrap_or("Ничего нет!")
-                        },
-                    );
-
-                    if ui.button("Вверх").clicked() {
-                        self.ui.shift_cursor_up();
-                    }
-                    if ui.button("Вниз").clicked() {
-                        self.ui.shift_cursor_down();
-                    }
-                });
+                egui::ComboBox::from_label("Выбрать аргумент программы").show_index(
+                    ui,
+                    &mut self.ui.arg_cursor,
+                    self.ui.args.len(),
+                    |i| {
+                        self.ui
+                            .args
+                            .get(i)
+                            .map(|arg| arg.name.as_str())
+                            .unwrap_or("Ничего нет!")
+                    },
+                );
 
                 if self.ui.arg_cursor < self.ui.args.len() {
                     let arg = &mut self.ui.args[self.ui.arg_cursor];
@@ -275,6 +286,7 @@ impl AppGui {
                             ContentType::Regex,
                             "Регулярное выражение",
                         );
+                        ui.radio_value(&mut arg.content_type, ContentType::Int, "Целое число");
                     });
 
                     match arg.content_type {
@@ -282,26 +294,22 @@ impl AppGui {
                         ContentType::Plain | ContentType::Regex => {
                             ui.text_edit_multiline(&mut arg.text);
                         }
+                        ContentType::Int => {
+                            let min_slider = egui::Slider::new(&mut arg.min, i64::MIN..=i64::MAX)
+                                .text("Минимальное значение")
+                                .logarithmic(true)
+                                .integer();
+
+                            ui.add(min_slider);
+
+                            let max_slider = egui::Slider::new(&mut arg.max, arg.min..=i64::MAX)
+                                .text("Максимальное значение")
+                                .logarithmic(true)
+                                .integer();
+
+                            ui.add(max_slider);
+                        }
                     }
-
-                    ui.horizontal(|ui| {
-                        let current = self.ui.arg_cursor;
-
-                        if ui.button("Сдвинуть вниз").clicked() {
-                            self.ui.shift_cursor_down();
-                            self.ui.args.swap(current, self.ui.arg_cursor);
-                        }
-
-                        if ui.button("Сдвинуть вверх").clicked() {
-                            self.ui.shift_cursor_up();
-                            self.ui.args.swap(current, self.ui.arg_cursor);
-                        }
-
-                        if ui.button("Удалить").clicked() {
-                            self.ui.args.remove(current);
-                            self.ui.shift_cursor_up(); // when we remove the last arg, cursor points to nothing
-                        }
-                    });
                 }
             });
 
@@ -321,8 +329,6 @@ impl AppGui {
                 return;
             }
 
-            thread::sleep(Duration::from_secs_f32(0.35));
-
             self.state = AppState::Working;
         }
     }
@@ -333,7 +339,10 @@ impl AppGui {
                 .stop_requested
                 .store(true, Ordering::Release);
 
-            thread::sleep(Duration::from_secs_f32(0.5));
+            self.restart_worker_thread(); // in case it stopped responding
+
+            self.last_result = None;
+
             self.state = AppState::Finished;
         }
 
@@ -368,13 +377,16 @@ impl AppGui {
             Some(RunResult::Success) => {
                 ui.colored_label(Color32::GREEN, "Все тесты прошли успешно");
             }
-            Some(RunResult::Failure { history }) => {
+            Some(RunResult::Failure {
+                history,
+                failed_valid,
+            }) => {
                 ui.colored_label(Color32::DARK_RED, "Обнаружены ошибки:");
 
                 ui.label("История ввода/вывода: ");
-
-                println!("{:?}", history);
                 ui.label(format!("{}", history));
+
+                ui.label(format!("Ожидаемый вывод: {}", failed_valid));
             }
             Some(RunResult::Error(error)) => {
                 ui.colored_label(Color32::DARK_RED, "Возникла ошибка выполнения: ");
@@ -391,8 +403,6 @@ impl AppGui {
 
 impl App for AppGui {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // TODO: side panel with help
-
         egui::CentralPanel::default().show(ctx, |ui| {
             egui::ScrollArea::vertical().show(ui, |ui| {
                 self.ui_main(ctx, ui);

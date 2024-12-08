@@ -1,5 +1,9 @@
 use crate::{
-    communicator::{Communicator, History}, converter::parse_args, generator::generate, gui::SharedWorkState,
+    communicator::{Communicator, History},
+    generator::generate,
+    gui::SharedWorkState,
+    parser::{parse_args, parse_int},
+    DATE_FORMAT,
 };
 use anyhow::Result;
 use bstr::BString;
@@ -7,6 +11,8 @@ use regex::bytes::Regex;
 use regex_syntax::hir::Hir;
 use std::{
     fmt::Display,
+    fs,
+    ops::RangeInclusive,
     path::PathBuf,
     process::{Command, Stdio},
     sync::{
@@ -38,21 +44,37 @@ pub enum ContentType {
     Empty,
     Plain,
     Regex,
+    Int,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct Argument {
     pub name: String,
     pub arg_type: ArgType,
     pub content_type: ContentType,
     pub text: String,
+    pub min: i64,
+    pub max: i64,
+}
+
+impl Default for Argument {
+    #[inline]
+    fn default() -> Self {
+        Self {
+            name: String::default(),
+            arg_type: ArgType::default(),
+            content_type: ContentType::default(),
+            text: String::default(),
+            min: i64::MIN,
+            max: i64::MAX,
+        }
+    }
 }
 
 #[derive(Debug)]
 pub struct TestingData {
     pub program_path: PathBuf,
     pub args: Vec<Argument>,
-    pub use_prev_errors: bool,
     pub successes_required: u32,
 }
 
@@ -84,10 +106,6 @@ fn run(testing_data: TestingData, work_state: &Arc<SharedWorkState>) -> Result<R
 
     let ops = parse_args(&testing_data.args)?;
 
-    assert!(
-        !testing_data.use_prev_errors,
-        "prev errors are not yet supported"
-    );
     work_state
         .required_tests
         .store(testing_data.successes_required, Ordering::Release);
@@ -111,14 +129,29 @@ fn run_single(command: &mut Command, operations: &[Operation]) -> Result<RunResu
 
     for op in operations.iter() {
         if !op.exec(&mut comm)? {
-            // TOD: reduce
+            let failed_valid = op.to_validation();
+
+            save_history(&comm.history, &failed_valid);
+
             return Ok(RunResult::Failure {
                 history: comm.history,
+                failed_valid,
             });
         }
     }
 
     Ok(RunResult::Success)
+}
+
+fn save_history(history: &History, failed_valid: &Validation) {
+    let date = time::OffsetDateTime::now_utc();
+
+    let file_name = format!("{}.txt", date.format(&DATE_FORMAT).unwrap());
+    let file_content = format!("{}\nОжидаемый вывод: {}", history, failed_valid);
+
+    if fs::write(file_name, file_content).is_err() {
+        eprintln!("Не удалось сохранить данные в файл!");
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -128,6 +161,13 @@ pub enum Operation {
 }
 
 impl Operation {
+    fn to_validation(&self) -> Validation {
+        match self {
+            Self::Output { validation } => validation.clone(),
+            _ => unreachable!(),
+        }
+    }
+
     fn exec(&self, comm: &mut Communicator) -> Result<bool> {
         match self {
             Self::Input { rules } => {
@@ -151,6 +191,7 @@ pub enum Rules {
     Empty,
     Plain(Arc<String>),
     Regex(Arc<Hir>),
+    Int(RangeInclusive<i64>),
 }
 
 #[derive(Clone, Debug)]
@@ -158,6 +199,23 @@ pub enum Validation {
     Empty,
     Plain(Arc<String>),
     Regex(Arc<Regex>),
+    Int(RangeInclusive<i64>),
+}
+
+impl Display for Validation {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Empty => write!(f, "пустая строка"),
+            Self::Plain(s) => write!(f, "строка \"{}\"", s.escape_debug()),
+            Self::Regex(r) => write!(f, "соответствие регулярному выражению\n{}", r.as_str()),
+            Self::Int(range) => write!(
+                f,
+                "целое в диапазоне от {} до {} включительно",
+                range.start(),
+                range.end()
+            ),
+        }
+    }
 }
 
 impl Validation {
@@ -167,6 +225,9 @@ impl Validation {
             Self::Empty => text.is_empty(),
             Self::Plain(correct) => text == correct.as_bytes(),
             Self::Regex(regex) => regex.is_match(text.as_slice()),
+            Self::Int(range) => parse_int(text)
+                .map(|val| range.contains(&val))
+                .unwrap_or(false),
         }
     }
 }
@@ -174,7 +235,10 @@ impl Validation {
 #[derive(Debug)]
 pub enum RunResult {
     Success,
-    Failure { history: History },
+    Failure {
+        history: History,
+        failed_valid: Validation,
+    },
     Error(anyhow::Error),
 }
 

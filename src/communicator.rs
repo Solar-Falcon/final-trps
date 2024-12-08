@@ -1,7 +1,10 @@
 use anyhow::{Error, Result};
 use bstr::{BString, ByteSlice};
 use std::{
-    fmt::Display, io::{BufRead, BufReader, Write}, process::{Child, Command}, sync::Arc
+    fmt::Display,
+    io::{BufRead, BufReader, Write},
+    process::{Child, Command},
+    sync::Arc,
 };
 
 #[derive(Clone, Debug)]
@@ -13,8 +16,8 @@ enum Item {
 impl Display for Item {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Stdin(inp)  => write!(f, "(ввод) | {}", inp),
-            Self::Stdout(out) => write!(f, "(вывод)| {}", out),
+            Self::Stdin(inp) => write!(f, "> {}", inp),
+            Self::Stdout(out) => write!(f, "< {}", out),
         }
     }
 }

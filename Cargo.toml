@@ -12,12 +12,13 @@ bstr = "1.10"
 fastrand = "2.1"
 regex-syntax = "0.8"
 regex = "1.11"
+time = { version = "0.3", features = ["formatting"] }
 
 eframe = "0.29"
 egui-file-dialog = "0.7"
 
 [profile.dev]
-opt-level = 1
+opt-level = 2
 
 [profile.dev.package.'*']
 opt-level = 3
