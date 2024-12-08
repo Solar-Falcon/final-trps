@@ -136,7 +136,7 @@ impl AppGui {
     fn ui_main(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::warn_if_debug_build(ui);
 
-        if ui.button("Выбрать исполняемый файл").clicked() {
+        if ui.button("Выбрать тестируемый исполняемый файл").clicked() {
             self.file_dialog.select_file();
         }
 
@@ -207,10 +207,10 @@ impl AppGui {
     }
 
     fn ui_argument_display(&mut self, ui: &mut egui::Ui) {
-        ui.label("Аргументы программы");
+        ui.label("Входные/выходные параметры программы");
 
         ui.horizontal(|ui| {
-            if ui.button("Добавить в конец").clicked() {
+            if ui.button("Добавить в конец списка").clicked() {
                 self.ui.args.push(Default::default());
                 self.ui.arg_cursor = self.ui.args.len() - 1; // cursor on the new argument
             }
@@ -250,7 +250,7 @@ impl AppGui {
 
         ui.horizontal(|ui| {
             ui.vertical(|ui| {
-                egui::ComboBox::from_label("Выбрать аргумент программы").show_index(
+                egui::ComboBox::from_label("Выбор").show_index(
                     ui,
                     &mut self.ui.arg_cursor,
                     self.ui.args.len(),
@@ -267,12 +267,12 @@ impl AppGui {
                     let arg = &mut self.ui.args[self.ui.arg_cursor];
 
                     ui.horizontal(|ui| {
-                        ui.label("Название аргумента: ");
+                        ui.label("Название: ");
                         ui.text_edit_singleline(&mut arg.name);
                     });
 
                     ui.horizontal(|ui| {
-                        ui.label("Тип аргумента: ");
+                        ui.label("Тип параметра: ");
                         ui.radio_value(&mut arg.arg_type, ArgType::Input, "Входной");
                         ui.radio_value(&mut arg.arg_type, ArgType::Output, "Выходной");
                     });
