@@ -285,7 +285,7 @@ impl AppGui {
                     });
 
                     ui.horizontal(|ui| {
-                        ui.label("Тип содержания: ");
+                        ui.label("Тип содержимого: ");
                         ui.radio_value(&mut arg.content_type, ContentType::Empty, "Пустой");
                         ui.radio_value(&mut arg.content_type, ContentType::Plain, "Текст");
                         ui.radio_value(

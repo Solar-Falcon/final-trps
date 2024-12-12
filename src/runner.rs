@@ -128,7 +128,7 @@ fn run_single(command: &mut Command, operations: &[Operation]) -> Result<RunResu
         if !op.exec(&mut comm)? {
             let failed_valid = op.to_validation();
 
-            save_history(&comm.history, &failed_valid);
+            save_err_history(&comm.history, &failed_valid);
 
             return Ok(RunResult::Failure {
                 history: comm.history,
@@ -140,10 +140,10 @@ fn run_single(command: &mut Command, operations: &[Operation]) -> Result<RunResu
     Ok(RunResult::Success)
 }
 
-fn save_history(history: &History, failed_valid: &Validation) {
+fn save_err_history(history: &History, failed_valid: &Validation) {
     let date = time::OffsetDateTime::now_utc();
 
-    let file_name = format!("{}.txt", date.format(&DATE_FORMAT).unwrap());
+    let file_name = format!("Ошибки {}.txt", date.format(&DATE_FORMAT).unwrap());
     let file_content = format!("{}\nОжидаемый вывод: {}", history, failed_valid);
 
     if fs::write(file_name, file_content).is_err() {
