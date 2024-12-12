@@ -107,28 +107,39 @@ fn run(testing_data: TestingData, work_state: &Arc<SharedWorkState>) -> Result<R
         .required_tests
         .store(testing_data.successes_required, Ordering::Release);
 
+    let mut success_histories = Vec::new();
+
     while !work_state.stop_requested.load(Ordering::Acquire)
         && (work_state.solved_tests.fetch_add(1, Ordering::AcqRel)
             < work_state.required_tests.load(Ordering::Acquire))
     {
-        let result = run_single(&mut command, &ops)?;
+        let result = run_single(&mut command, &ops, &mut success_histories)?;
 
         if !matches!(result, RunResult::Success) {
             return Ok(result);
         }
     }
 
+    save_to_file("Успехи", &success_histories.join("\n#====================#\n"));
+
     Ok(RunResult::Success)
 }
 
-fn run_single(command: &mut Command, operations: &[Operation]) -> Result<RunResult> {
+fn run_single(
+    command: &mut Command,
+    operations: &[Operation],
+    success_histories: &mut Vec<String>,
+) -> Result<RunResult> {
     let mut comm = Communicator::new(command)?;
 
     for op in operations.iter() {
         if !op.exec(&mut comm)? {
             let failed_valid = op.to_validation();
 
-            save_err_history(&comm.history, &failed_valid);
+            save_to_file(
+                "Ошибки",
+                &format!("{}\nОжидаемый вывод: {}", &comm.history, &failed_valid),
+            );
 
             return Ok(RunResult::Failure {
                 history: comm.history,
@@ -137,16 +148,17 @@ fn run_single(command: &mut Command, operations: &[Operation]) -> Result<RunResu
         }
     }
 
+    success_histories.push(comm.history.to_string());
+
     Ok(RunResult::Success)
 }
 
-fn save_err_history(history: &History, failed_valid: &Validation) {
+fn save_to_file(file_prefix: &str, contents: &str) {
     let date = time::OffsetDateTime::now_utc();
 
-    let file_name = format!("Ошибки {}.txt", date.format(&DATE_FORMAT).unwrap());
-    let file_content = format!("{}\nОжидаемый вывод: {}", history, failed_valid);
+    let file_name = format!("{} {}.txt", file_prefix, date.format(&DATE_FORMAT).unwrap());
 
-    if fs::write(file_name, file_content).is_err() {
+    if fs::write(file_name, contents).is_err() {
         eprintln!("Не удалось сохранить данные в файл!");
     }
 }
