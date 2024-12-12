@@ -1,18 +1,15 @@
 use crate::{
     communicator::{Communicator, History},
-    generator::generate,
+    generator::Rules,
     gui::SharedWorkState,
-    parser::{parse_args, parse_int},
+    parser::parse_args,
+    validator::Validation,
     DATE_FORMAT,
 };
 use anyhow::Result;
-use bstr::BString;
-use regex::bytes::Regex;
-use regex_syntax::hir::Hir;
 use std::{
     fmt::Display,
     fs,
-    ops::RangeInclusive,
     path::PathBuf,
     process::{Command, Stdio},
     sync::{
@@ -171,7 +168,7 @@ impl Operation {
     fn exec(&self, comm: &mut Communicator) -> Result<bool> {
         match self {
             Self::Input { rules } => {
-                let arg = generate(rules);
+                let arg = rules.generate();
 
                 comm.write_line(&arg)?;
 
@@ -182,52 +179,6 @@ impl Operation {
 
                 Ok(validation.validate(&text))
             }
-        }
-    }
-}
-
-#[derive(Clone, Debug)]
-pub enum Rules {
-    Empty,
-    Plain(Arc<String>),
-    Regex(Arc<Hir>),
-    Int(RangeInclusive<i64>),
-}
-
-#[derive(Clone, Debug)]
-pub enum Validation {
-    Empty,
-    Plain(Arc<String>),
-    Regex(Arc<Regex>),
-    Int(RangeInclusive<i64>),
-}
-
-impl Display for Validation {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Empty => write!(f, "пустая строка"),
-            Self::Plain(s) => write!(f, "строка \"{}\"", s.escape_debug()),
-            Self::Regex(r) => write!(f, "соответствие регулярному выражению\n{}", r.as_str()),
-            Self::Int(range) => write!(
-                f,
-                "целое в диапазоне от {} до {} включительно",
-                range.start(),
-                range.end()
-            ),
-        }
-    }
-}
-
-impl Validation {
-    #[inline]
-    fn validate(&self, text: &BString) -> bool {
-        match self {
-            Self::Empty => text.is_empty(),
-            Self::Plain(correct) => text == correct.as_bytes(),
-            Self::Regex(regex) => regex.is_match(text.as_slice()),
-            Self::Int(range) => parse_int(text)
-                .map(|val| range.contains(&val))
-                .unwrap_or(false),
         }
     }
 }

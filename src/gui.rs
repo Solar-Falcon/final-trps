@@ -136,7 +136,8 @@ impl AppGui {
     fn ui_main(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         egui::warn_if_debug_build(ui);
 
-        if ui.button("Выбрать тестируемый исполняемый файл").clicked() {
+        if ui.button("Выбрать тестируемый исполняемый файл").clicked()
+        {
             self.file_dialog.select_file();
         }
 
@@ -187,12 +188,30 @@ impl AppGui {
         ui.vertical(|ui| {
             ui.label("Навигация");
 
-            if ui.button("Вверх").clicked() {
-                self.ui.shift_cursor_up();
-            }
-            if ui.button("Вниз").clicked() {
-                self.ui.shift_cursor_down();
-            }
+            ui.horizontal(|ui| {
+                ui.vertical(|ui| {
+                    if ui.button("Вверх").clicked() {
+                        self.ui.shift_cursor_up();
+                    }
+                    if ui.button("Вниз").clicked() {
+                        self.ui.shift_cursor_down();
+                    }
+                });
+
+                ui.vertical(|ui| {
+                    let current = self.ui.arg_cursor;
+
+                    if ui.button("Сдвинуть вверх").clicked() {
+                        self.ui.shift_cursor_up();
+                        self.ui.args.swap(current, self.ui.arg_cursor);
+                    }
+
+                    if ui.button("Сдвинуть вниз").clicked() {
+                        self.ui.shift_cursor_down();
+                        self.ui.args.swap(current, self.ui.arg_cursor);
+                    }
+                });
+            });
 
             ui.separator();
 
@@ -229,19 +248,7 @@ impl AppGui {
 
         let current = self.ui.arg_cursor;
 
-        ui.horizontal(|ui| {
-            if ui.button("Сдвинуть вниз").clicked() {
-                self.ui.shift_cursor_down();
-                self.ui.args.swap(current, self.ui.arg_cursor);
-            }
-
-            if ui.button("Сдвинуть вверх").clicked() {
-                self.ui.shift_cursor_up();
-                self.ui.args.swap(current, self.ui.arg_cursor);
-            }
-        });
-
-        if ui.button("Удалить").clicked() {
+        if ui.button("Удалить текущий").clicked() {
             self.ui.args.remove(current);
             self.ui.shift_cursor_up(); // when we remove the last arg, cursor points to nothing
         }

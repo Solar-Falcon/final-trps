@@ -1,4 +1,8 @@
-use crate::runner::{ArgType, Argument, ContentType, Operation, Rules, Validation};
+use crate::{
+    generator::Rules,
+    runner::{ArgType, Argument, ContentType, Operation},
+    validator::Validation,
+};
 use anyhow::Result;
 use bstr::{BString, ByteSlice};
 use regex::bytes::Regex;
@@ -48,7 +52,7 @@ fn parse_input_arg(arg: &Argument) -> Result<Rules> {
         ContentType::Regex => Ok(Rules::Regex(Arc::new(
             regex_syntax::ParserBuilder::new()
                 .ignore_whitespace(true)
-                .unicode(false)
+                // .unicode(false)
                 .build()
                 .parse(&arg.text)?,
         ))),

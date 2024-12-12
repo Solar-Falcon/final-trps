@@ -11,6 +11,7 @@ pub mod generator;
 pub mod gui;
 pub mod parser;
 pub mod runner;
+pub mod validator;
 
 static DATE_FORMAT: LazyLock<OwnedFormatItem> = LazyLock::new(|| {
     time::format_description::parse_owned::<2>("[year]-[month]-[day] [hour]-[minute]-[second]")

@@ -1,19 +1,28 @@
-use crate::runner::Rules;
 use bstr::{BString, ByteVec};
 use regex_syntax::hir::{Class, ClassBytes, ClassUnicode, Hir, HirKind};
 use std::{ops::RangeInclusive, sync::Arc};
 
-pub fn generate(rules: &Rules) -> Arc<BString> {
-    match rules {
-        Rules::Empty => Arc::new(BString::default()),
-        Rules::Plain(text) => Arc::new(BString::from(text.as_bytes())),
-        Rules::Regex(hir) => {
-            let mut result = BString::from("");
-            generate_regex_item(hir).append_to(&mut result);
+#[derive(Clone, Debug)]
+pub enum Rules {
+    Empty,
+    Plain(Arc<String>),
+    Regex(Arc<Hir>),
+    Int(RangeInclusive<i64>),
+}
 
-            Arc::new(result)
+impl Rules {
+    pub fn generate(&self) -> Arc<BString> {
+        match self {
+            Rules::Empty => Arc::new(BString::default()),
+            Rules::Plain(text) => Arc::new(BString::from(text.as_bytes())),
+            Rules::Regex(hir) => {
+                let mut result = BString::from("");
+                generate_regex_item(hir).append_to(&mut result);
+
+                Arc::new(result)
+            }
+            Rules::Int(range) => Arc::new(fastrand::i64(range.clone()).to_string().into()),
         }
-        Rules::Int(range) => Arc::new(fastrand::i64(range.clone()).to_string().into()),
     }
 }
 
