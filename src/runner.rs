@@ -120,7 +120,10 @@ fn run(testing_data: TestingData, work_state: &Arc<SharedWorkState>) -> Result<R
         }
     }
 
-    save_to_file("Успехи", &success_histories.join("\n#====================#\n"));
+    save_to_file(
+        "Успехи",
+        &success_histories.join("\n#====================#\n"),
+    );
 
     Ok(RunResult::Success)
 }
