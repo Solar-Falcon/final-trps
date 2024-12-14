@@ -1,7 +1,7 @@
 use crate::{
     classes::{IntRangesArg, PlainTextArg, RegexArg},
     communicator::{Communicator, History},
-    gui::SharedWorkState,
+    gui::SharedRunnerState,
     DATE_FORMAT,
 };
 use bstr::BString;
@@ -81,7 +81,7 @@ pub struct TestingData {
 
 #[derive(Debug)]
 pub struct Runner {
-    work_state: Arc<SharedWorkState>,
+    work_state: Arc<SharedRunnerState>,
     work_receiver: Receiver<TestingData>,
     result_sender: SyncSender<TestReport>,
 }
@@ -89,7 +89,7 @@ pub struct Runner {
 impl Runner {
     #[inline]
     pub fn new(
-        work_state: Arc<SharedWorkState>,
+        work_state: Arc<SharedRunnerState>,
         work_receiver: Receiver<TestingData>,
         result_sender: SyncSender<TestReport>,
     ) -> Self {
@@ -129,9 +129,8 @@ impl Runner {
 
         let mut success_histories = Vec::new();
 
-        while !self.work_state.stop_requested.load(Ordering::Acquire)
-            && (self.work_state.solved_tests.fetch_add(1, Ordering::AcqRel)
-                < self.work_state.required_tests.load(Ordering::Acquire))
+        while self.work_state.solved_tests.fetch_add(1, Ordering::AcqRel)
+            < self.work_state.required_tests.load(Ordering::Acquire)
         {
             let result = self.run_single(&mut command, &ops, &mut success_histories)?;
 
