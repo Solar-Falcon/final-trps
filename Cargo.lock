@@ -1117,7 +1117,7 @@ dependencies = [
  "bstr",
  "eframe",
  "egui-file-dialog",
- "fastrand",
+ "rand",
  "regex",
  "regex-syntax",
  "time",

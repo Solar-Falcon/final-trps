@@ -1,4 +1,4 @@
-use crate::runner::{self, ArgType, Argument, ContentType, RunResult, TestingData};
+use crate::runner::{ArgType, Argument, ContentType, TestReport, Runner, TestingData};
 use anyhow::Result;
 use eframe::{
     egui::{self, Color32},
@@ -12,7 +12,6 @@ use std::{
         mpsc::{self, Receiver, SyncSender},
         Arc,
     },
-    thread,
 };
 
 #[derive(Debug, Default)]
@@ -63,9 +62,9 @@ impl UiData {
 pub struct AppGui {
     work_state: Arc<SharedWorkState>,
     work_sender: SyncSender<TestingData>,
-    result_receiver: Receiver<RunResult>,
+    result_receiver: Receiver<TestReport>,
     state: AppState,
-    last_result: Option<RunResult>,
+    last_result: Option<TestReport>,
 
     program_file: Option<PathBuf>,
     file_dialog: FileDialog,
@@ -77,13 +76,9 @@ impl AppGui {
     pub fn new(cc: &eframe::CreationContext) -> Result<Self> {
         let work_state = Arc::new(SharedWorkState::default());
         let (work_sender, work_receiver) = mpsc::sync_channel::<TestingData>(0);
-        let (result_sender, result_receiver) = mpsc::sync_channel::<RunResult>(0);
+        let (result_sender, result_receiver) = mpsc::sync_channel::<TestReport>(0);
 
-        thread::spawn(runner::working_thread(
-            work_state.clone(),
-            work_receiver,
-            result_sender,
-        ));
+        Runner::new(work_state.clone(), work_receiver, result_sender).start();
 
         // default is too small (especially on linux)
         cc.egui_ctx.set_zoom_factor(1.75);
@@ -121,13 +116,9 @@ impl AppGui {
         self.last_result = None;
 
         let (work_sender, work_receiver) = mpsc::sync_channel::<TestingData>(0);
-        let (result_sender, result_receiver) = mpsc::sync_channel::<RunResult>(0);
+        let (result_sender, result_receiver) = mpsc::sync_channel::<TestReport>(0);
 
-        thread::spawn(runner::working_thread(
-            self.work_state.clone(),
-            work_receiver,
-            result_sender,
-        ));
+        Runner::new(self.work_state.clone(), work_receiver, result_sender).start();
 
         self.work_sender = work_sender;
         self.result_receiver = result_receiver;
@@ -286,37 +277,22 @@ impl AppGui {
 
                     ui.horizontal(|ui| {
                         ui.label("Тип содержимого: ");
-                        ui.radio_value(&mut arg.content_type, ContentType::Empty, "Пустой");
-                        ui.radio_value(&mut arg.content_type, ContentType::Plain, "Текст");
+                        ui.radio_value(&mut arg.content_type, ContentType::PlainText, "Текст");
                         ui.radio_value(
                             &mut arg.content_type,
                             ContentType::Regex,
                             "Регулярное выражение",
                         );
-                        ui.radio_value(&mut arg.content_type, ContentType::Int, "Целое число");
+                        ui.radio_value(
+                            &mut arg.content_type,
+                            ContentType::IntRanges,
+                            "Целые числа",
+                        );
                     });
 
-                    match arg.content_type {
-                        ContentType::Empty => {}
-                        ContentType::Plain | ContentType::Regex => {
-                            ui.text_edit_multiline(&mut arg.text);
-                        }
-                        ContentType::Int => {
-                            let min_slider = egui::Slider::new(&mut arg.min, i64::MIN..=i64::MAX)
-                                .text("Минимальное значение")
-                                .logarithmic(true)
-                                .integer();
+                    let text_edit = egui::TextEdit::multiline(&mut arg.text).code_editor();
 
-                            ui.add(min_slider);
-
-                            let max_slider = egui::Slider::new(&mut arg.max, arg.min..=i64::MAX)
-                                .text("Максимальное значение")
-                                .logarithmic(true)
-                                .integer();
-
-                            ui.add(max_slider);
-                        }
-                    }
+                    ui.add(text_edit);
                 }
             });
 
@@ -381,21 +357,21 @@ impl AppGui {
         ui.separator();
 
         match self.last_result.as_mut() {
-            Some(RunResult::Success) => {
+            Some(TestReport::Success) => {
                 ui.colored_label(Color32::GREEN, "Все тесты прошли успешно");
             }
-            Some(RunResult::Failure {
+            Some(TestReport::Failure {
                 history,
-                failed_valid,
+                error_message,
             }) => {
                 ui.colored_label(Color32::DARK_RED, "Обнаружены ошибки:");
 
                 ui.label("История ввода/вывода: ");
                 ui.label(format!("{}", history));
 
-                ui.label(format!("Ожидаемый вывод: {}", failed_valid));
+                ui.label(error_message.as_str());
             }
-            Some(RunResult::Error(error)) => {
+            Some(TestReport::Error(error)) => {
                 ui.colored_label(Color32::DARK_RED, "Возникла ошибка выполнения: ");
                 ui.label(format!("{error}"));
             }
@@ -415,15 +391,5 @@ impl App for AppGui {
                 self.ui_main(ctx, ui);
             });
         });
-    }
-
-    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw_input: &mut egui::RawInput) {
-        if let Some(path) = raw_input
-            .dropped_files
-            .first_mut()
-            .and_then(|dropped_file| dropped_file.path.take())
-        {
-            self.program_file = Some(path);
-        }
     }
 }

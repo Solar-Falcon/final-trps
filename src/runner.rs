@@ -1,14 +1,11 @@
 use crate::{
     communicator::{Communicator, History},
-    generator::Rules,
     gui::SharedWorkState,
-    parser::parse_args,
-    validator::Validation,
     DATE_FORMAT,
 };
-use anyhow::Result;
+use bstr::BString;
 use std::{
-    fmt::Display,
+    fmt::{Debug, Display},
     fs,
     path::PathBuf,
     process::{Command, Stdio},
@@ -17,6 +14,7 @@ use std::{
         mpsc::{Receiver, SyncSender},
         Arc,
     },
+    thread,
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
@@ -38,33 +36,22 @@ impl Display for ArgType {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
 pub enum ContentType {
     #[default]
-    Empty,
-    Plain,
+    PlainText,
     Regex,
-    Int,
+    IntRanges,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Argument {
     pub name: String,
     pub arg_type: ArgType,
     pub content_type: ContentType,
     pub text: String,
-    pub min: i64,
-    pub max: i64,
 }
 
-impl Default for Argument {
-    #[inline]
-    fn default() -> Self {
-        Self {
-            name: String::default(),
-            arg_type: ArgType::default(),
-            content_type: ContentType::default(),
-            text: String::default(),
-            min: i64::MIN,
-            max: i64::MAX,
-        }
+impl Argument {
+    fn to_dyn_arg(&self) -> anyhow::Result<Box<dyn ArgumentTrait>> {
+        todo!()
     }
 }
 
@@ -75,85 +62,104 @@ pub struct TestingData {
     pub successes_required: u32,
 }
 
-#[inline]
-pub fn working_thread(
+#[derive(Debug)]
+pub struct Runner {
     work_state: Arc<SharedWorkState>,
     work_receiver: Receiver<TestingData>,
-    result_sender: SyncSender<RunResult>,
-) -> impl FnOnce() + Send + 'static {
-    move || {
-        while let Ok(testing_data) = work_receiver.recv() {
-            let result = run(testing_data, &work_state);
+    result_sender: SyncSender<TestReport>,
+}
 
-            if result_sender.send(result.into()).is_err() {
-                // result channel disconnected => main thread died
-                break;
+impl Runner {
+    #[inline]
+    pub fn new(
+        work_state: Arc<SharedWorkState>,
+        work_receiver: Receiver<TestingData>,
+        result_sender: SyncSender<TestReport>,
+    ) -> Self {
+        Self {
+            work_state,
+            work_receiver,
+            result_sender,
+        }
+    }
+
+    pub fn start(mut self) {
+        thread::spawn(move || {
+            while let Ok(testing_data) = self.work_receiver.recv() {
+                let result = self.run_tests(testing_data);
+
+                if self.result_sender.send(result.into()).is_err() {
+                    // result channel disconnected => main thread died
+                    break;
+                }
+
+                self.work_state.reset();
             }
 
-            work_state.reset();
-        }
-
-        // work channel disconnected => main thread died
-    }
-}
-
-fn run(testing_data: TestingData, work_state: &Arc<SharedWorkState>) -> Result<RunResult> {
-    let mut command = Command::new(testing_data.program_path);
-    command.stdin(Stdio::piped()).stdout(Stdio::piped());
-
-    let ops = parse_args(&testing_data.args)?;
-
-    work_state
-        .required_tests
-        .store(testing_data.successes_required, Ordering::Release);
-
-    let mut success_histories = Vec::new();
-
-    while !work_state.stop_requested.load(Ordering::Acquire)
-        && (work_state.solved_tests.fetch_add(1, Ordering::AcqRel)
-            < work_state.required_tests.load(Ordering::Acquire))
-    {
-        let result = run_single(&mut command, &ops, &mut success_histories)?;
-
-        if !matches!(result, RunResult::Success) {
-            return Ok(result);
-        }
+            // work channel disconnected => main thread died
+        });
     }
 
-    save_to_file(
-        "Успехи",
-        &success_histories.join("\n#====================#\n"),
-    );
+    fn run_tests(&mut self, testing_data: TestingData) -> anyhow::Result<TestReport> {
+        let mut command = Command::new(testing_data.program_path);
+        command.stdin(Stdio::piped()).stdout(Stdio::piped());
 
-    Ok(RunResult::Success)
-}
+        let ops = Operation::process(&testing_data.args)?;
 
-fn run_single(
-    command: &mut Command,
-    operations: &[Operation],
-    success_histories: &mut Vec<String>,
-) -> Result<RunResult> {
-    let mut comm = Communicator::new(command)?;
+        self.work_state
+            .required_tests
+            .store(testing_data.successes_required, Ordering::Release);
 
-    for op in operations.iter() {
-        if !op.exec(&mut comm)? {
-            let failed_valid = op.to_validation();
+        let mut success_histories = Vec::new();
 
-            save_to_file(
-                "Ошибки",
-                &format!("{}\nОжидаемый вывод: {}", &comm.history, &failed_valid),
-            );
+        while !self.work_state.stop_requested.load(Ordering::Acquire)
+            && (self.work_state.solved_tests.fetch_add(1, Ordering::AcqRel)
+                < self.work_state.required_tests.load(Ordering::Acquire))
+        {
+            let result = self.run_single(&mut command, &ops, &mut success_histories)?;
 
-            return Ok(RunResult::Failure {
-                history: comm.history,
-                failed_valid,
-            });
+            if !matches!(result, TestReport::Success) {
+                return Ok(result);
+            }
         }
+
+        save_to_file(
+            "Успехи",
+            &success_histories.join("\n#====================#\n"),
+        );
+
+        Ok(TestReport::Success)
     }
 
-    success_histories.push(comm.history.to_string());
+    fn run_single(
+        &mut self,
+        command: &mut Command,
+        operations: &[Operation],
+        success_histories: &mut Vec<String>,
+    ) -> anyhow::Result<TestReport> {
+        let mut comm = Communicator::new(command)?;
 
-    Ok(RunResult::Success)
+        for op in operations.iter() {
+            match op.exec(&mut comm)? {
+                OpReport::Success => {}
+                OpReport::Failure { error_message } => {
+                    save_to_file(
+                        "Ошибки",
+                        &format!("{}\n{}", &comm.history, &error_message),
+                    );
+    
+                    return Ok(TestReport::Failure {
+                        history: comm.history,
+                        error_message,
+                    });
+                }
+            }
+        }
+
+        success_histories.push(comm.history.to_string());
+
+        Ok(TestReport::Success)
+    }
 }
 
 fn save_to_file(file_prefix: &str, contents: &str) {
@@ -166,51 +172,68 @@ fn save_to_file(file_prefix: &str, contents: &str) {
     }
 }
 
-#[derive(Clone, Debug)]
+pub trait ArgumentTrait: Debug {
+    fn parse(text: &str) -> anyhow::Result<Self>
+    where
+        Self: Sized;
+
+    fn validate(&self, text: &BString) -> OpReport;
+    fn generate(&self) -> BString;
+}
+
+#[derive(Debug)]
 pub enum Operation {
-    Output { validation: Validation },
-    Input { rules: Rules },
+    Output(Box<dyn ArgumentTrait>),
+    Input(Box<dyn ArgumentTrait>),
 }
 
 impl Operation {
-    fn to_validation(&self) -> Validation {
-        match self {
-            Self::Output { validation } => validation.clone(),
-            _ => unreachable!(),
-        }
+    #[inline]
+    fn process(args: &[Argument]) -> anyhow::Result<Vec<Self>> {
+        args.iter().map(|arg| {
+            Ok(match arg.arg_type {
+                ArgType::Input => Self::Input(arg.to_dyn_arg()?),
+                ArgType::Output => Self::Output(arg.to_dyn_arg()?),
+            })
+        }).collect()
     }
 
-    fn exec(&self, comm: &mut Communicator) -> Result<bool> {
+    fn exec(&self, comm: &mut Communicator) -> anyhow::Result<OpReport> {
         match self {
-            Self::Input { rules } => {
-                let arg = rules.generate();
+            Self::Input(arg) => {
+                let string = arg.generate();
 
-                comm.write_line(&arg)?;
+                comm.write_line(string)?;
 
-                Ok(true)
+                Ok(OpReport::Success)
             }
-            Self::Output { validation } => {
+            Self::Output(arg) => {
                 let text = comm.read_line()?;
 
-                Ok(validation.validate(&text))
+                Ok(arg.validate(&text))
             }
         }
     }
 }
 
 #[derive(Debug)]
-pub enum RunResult {
+pub enum OpReport {
     Success,
     Failure {
-        history: History,
-        failed_valid: Validation,
-    },
+        error_message: String,
+    }
+}
+
+#[derive(Debug)]
+pub enum TestReport {
+    Success,
+    Failure { history: History, error_message: String },
     Error(anyhow::Error),
 }
 
-impl From<Result<Self>> for RunResult {
+impl From<anyhow::Result<Self>> for TestReport {
     #[inline]
-    fn from(value: Result<Self>) -> Self {
+    fn from(value: anyhow::Result<Self>) -> Self {
         match value {
             Ok(this) => this,
             Err(error) => Self::Error(error),

@@ -4,13 +4,12 @@ use std::{
     fmt::Display,
     io::{BufRead, BufReader, Write},
     process::{Child, Command},
-    sync::Arc,
 };
 
 #[derive(Clone, Debug)]
 enum Item {
-    Stdin(Arc<BString>),
-    Stdout(Arc<BString>),
+    Stdin(BString),
+    Stdout(BString),
 }
 
 impl Display for Item {
@@ -51,7 +50,7 @@ impl Communicator {
         })
     }
 
-    pub fn read_line(&mut self) -> Result<Arc<BString>> {
+    pub fn read_line(&mut self) -> Result<BString> {
         let stdout = self
             .process
             .stdout
@@ -61,23 +60,23 @@ impl Communicator {
         let mut buffer = Vec::new();
         BufReader::new(stdout).read_until(b'\n', &mut buffer)?;
 
-        let string = Arc::new(BString::from(buffer.as_bstr().trim_end()));
+        let string = BString::from(buffer.as_bstr().trim_end());
         self.history.vec.push(Item::Stdout(string.clone()));
 
         Ok(string)
     }
 
-    pub fn write_line(&mut self, line: &Arc<BString>) -> Result<()> {
+    pub fn write_line(&mut self, line: BString) -> Result<()> {
         let stdin = self
             .process
             .stdin
             .as_mut()
             .ok_or(Error::msg("program stdin unavailable"))?;
 
-        stdin.write_all(line)?;
+        stdin.write_all(&line)?;
         stdin.write_all(b"\n")?;
 
-        self.history.vec.push(Item::Stdin(line.clone()));
+        self.history.vec.push(Item::Stdin(line));
 
         Ok(())
     }
