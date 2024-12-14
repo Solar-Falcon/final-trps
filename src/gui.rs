@@ -1,4 +1,4 @@
-use crate::runner::{ArgType, Argument, ContentType, TestReport, Runner, TestingData};
+use crate::runner::{ArgType, Argument, ContentType, Runner, TestReport, TestingData};
 use anyhow::Result;
 use eframe::{
     egui::{self, Color32},

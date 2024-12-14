@@ -6,10 +6,10 @@ use gui::AppGui;
 use std::sync::LazyLock;
 use time::format_description::OwnedFormatItem;
 
+pub mod classes;
 pub mod communicator;
 pub mod gui;
 pub mod runner;
-pub mod classes;
 // pub mod validator;
 // pub mod parser;
 // pub mod generator;

@@ -1,4 +1,5 @@
 use crate::{
+    classes::{IntRangesArg, PlainTextArg, RegexArg},
     communicator::{Communicator, History},
     gui::SharedWorkState,
     DATE_FORMAT,
@@ -51,7 +52,23 @@ pub struct Argument {
 
 impl Argument {
     fn to_dyn_arg(&self) -> anyhow::Result<Box<dyn ArgumentTrait>> {
-        todo!()
+        match self.content_type {
+            ContentType::PlainText => PlainTextArg::parse(&self.text).map(|arg| {
+                let boxed: Box<dyn ArgumentTrait> = Box::new(arg);
+
+                boxed
+            }),
+            ContentType::Regex => RegexArg::parse(&self.text).map(|arg| {
+                let boxed: Box<dyn ArgumentTrait> = Box::new(arg);
+
+                boxed
+            }),
+            ContentType::IntRanges => IntRangesArg::parse(&self.text).map(|arg| {
+                let boxed: Box<dyn ArgumentTrait> = Box::new(arg);
+
+                boxed
+            }),
+        }
     }
 }
 
@@ -143,11 +160,8 @@ impl Runner {
             match op.exec(&mut comm)? {
                 OpReport::Success => {}
                 OpReport::Failure { error_message } => {
-                    save_to_file(
-                        "Ошибки",
-                        &format!("{}\n{}", &comm.history, &error_message),
-                    );
-    
+                    save_to_file("Ошибки", &format!("{}\n{}", &comm.history, &error_message));
+
                     return Ok(TestReport::Failure {
                         history: comm.history,
                         error_message,
@@ -190,12 +204,14 @@ pub enum Operation {
 impl Operation {
     #[inline]
     fn process(args: &[Argument]) -> anyhow::Result<Vec<Self>> {
-        args.iter().map(|arg| {
-            Ok(match arg.arg_type {
-                ArgType::Input => Self::Input(arg.to_dyn_arg()?),
-                ArgType::Output => Self::Output(arg.to_dyn_arg()?),
+        args.iter()
+            .map(|arg| {
+                Ok(match arg.arg_type {
+                    ArgType::Input => Self::Input(arg.to_dyn_arg()?),
+                    ArgType::Output => Self::Output(arg.to_dyn_arg()?),
+                })
             })
-        }).collect()
+            .collect()
     }
 
     fn exec(&self, comm: &mut Communicator) -> anyhow::Result<OpReport> {
@@ -219,15 +235,16 @@ impl Operation {
 #[derive(Debug)]
 pub enum OpReport {
     Success,
-    Failure {
-        error_message: String,
-    }
+    Failure { error_message: String },
 }
 
 #[derive(Debug)]
 pub enum TestReport {
     Success,
-    Failure { history: History, error_message: String },
+    Failure {
+        history: History,
+        error_message: String,
+    },
     Error(anyhow::Error),
 }
 

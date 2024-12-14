@@ -212,7 +212,11 @@ impl IntRangesArg {
             Err(err) => {
                 let offset = s.as_ptr() as usize - line.as_ptr() as usize;
 
-                Err(anyhow::Error::msg(Self::parse_error(line, offset, &err.to_string())))
+                Err(anyhow::Error::msg(Self::parse_error(
+                    line,
+                    offset,
+                    &err.to_string(),
+                )))
             }
         }
     }
