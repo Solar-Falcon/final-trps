@@ -275,20 +275,20 @@ impl RunManager {
         }
     }
 
-    fn try_receive_result(&mut self) -> bool {
+    fn try_receive_result(&mut self) -> Option<bool> {
         match self.result_receiver.try_recv() {
             Ok(result) => {
                 self.last_report = Some(result);
-                true
+                Some(true)
             }
             Err(mpsc::TryRecvError::Disconnected) => {
                 // worker thread died (panic happened)
                 eprintln!("worker thread died -- restarting");
                 self.restart_thread();
 
-                false
+                None
             }
-            Err(mpsc::TryRecvError::Empty) => false,
+            Err(mpsc::TryRecvError::Empty) => Some(false),
         }
     }
 }
@@ -396,8 +396,14 @@ impl AppGui {
 
         ui.add(progress_bar);
 
-        if self.run_manager.try_receive_result() {
-            self.state = AppState::Finished;
+        match self.run_manager.try_receive_result() {
+            Some(true) => {
+                self.state = AppState::Finished;
+            }
+            Some(false) => {}
+            None => {
+                self.state = AppState::Idle;
+            }
         }
     }
 
