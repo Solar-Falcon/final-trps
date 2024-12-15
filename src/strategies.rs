@@ -1,4 +1,4 @@
-use crate::runner::{Strategy, OpReport};
+use crate::runner::{OpReport, Strategy};
 use bstr::{BString, ByteSlice, ByteVec};
 use rand::{
     rngs::ThreadRng,
@@ -59,6 +59,39 @@ impl RegExpr {
             self.regex.as_str()
         )
     }
+
+    fn generate_regex_item<'a>(&self, hir: &'a Hir) -> Item<'a> {
+        match hir.kind() {
+            HirKind::Empty => Item::Literal(BString::from("")),
+            HirKind::Literal(lit) => Item::Literal(lit.0.to_vec().into()),
+            HirKind::Class(class) => match class {
+                Class::Bytes(bytes) => Item::ByteChoice(bytes),
+                Class::Unicode(unic) => Item::CharChoice(unic),
+            },
+            HirKind::Repetition(rep) => {
+                let item = self.generate_regex_item(&rep.sub);
+                let range = match (rep.min, rep.max) {
+                    (0, None) => 0..=40, // the `*`
+                    (1, None) => 1..=40, // the `+`
+                    (min, None) => min..=min.saturating_mul(2),
+                    (min, Some(max)) => min..=max,
+                };
+
+                Item::Repeat(Box::new(item), range)
+            }
+            HirKind::Capture(cap) => self.generate_regex_item(&cap.sub),
+            HirKind::Concat(cat) => {
+                Item::Seq(cat.iter().map(|it| self.generate_regex_item(it)).collect())
+            }
+            HirKind::Alternation(alt) => {
+                Item::AnyOf(alt.iter().map(|it| self.generate_regex_item(it)).collect())
+            }
+            HirKind::Look(_) => {
+                eprintln!("Warning: anchors and boundaries in input regexes are useless");
+                Item::Literal(BString::from(""))
+            }
+        }
+    }
 }
 
 impl Strategy for RegExpr {
@@ -81,7 +114,8 @@ impl Strategy for RegExpr {
         let mut rng = rand::thread_rng();
         let mut result = BString::from("");
 
-        generate_regex_item(&self.syntax).append_to(&mut result, &mut rng);
+        self.generate_regex_item(&self.syntax)
+            .append_to(&mut result, &mut rng);
 
         result
     }
@@ -94,35 +128,6 @@ impl Strategy for RegExpr {
             OpReport::Failure {
                 error_message: self.failure_msg(),
             }
-        }
-    }
-}
-
-fn generate_regex_item(hir: &Hir) -> Item {
-    match hir.kind() {
-        HirKind::Empty => Item::Literal(BString::from("")),
-        HirKind::Literal(lit) => Item::Literal(lit.0.to_vec().into()),
-        HirKind::Class(class) => match class {
-            Class::Bytes(bytes) => Item::ByteChoice(bytes),
-            Class::Unicode(unic) => Item::CharChoice(unic),
-        },
-        HirKind::Repetition(rep) => {
-            let item = generate_regex_item(&rep.sub);
-            let range = match (rep.min, rep.max) {
-                (0, None) => 0..=40, // the `*`
-                (1, None) => 1..=40, // the `+`
-                (min, None) => min..=min.saturating_mul(2),
-                (min, Some(max)) => min..=max,
-            };
-
-            Item::Repeat(Box::new(item), range)
-        }
-        HirKind::Capture(cap) => generate_regex_item(&cap.sub),
-        HirKind::Concat(cat) => Item::Seq(cat.iter().map(generate_regex_item).collect()),
-        HirKind::Alternation(alt) => Item::AnyOf(alt.iter().map(generate_regex_item).collect()),
-        HirKind::Look(_) => {
-            eprintln!("Warning: anchors and boundaries in input regexes are useless");
-            Item::Literal(BString::from(""))
         }
     }
 }
@@ -196,26 +201,17 @@ impl IntRanges {
     }
 
     #[inline]
-    fn parse_error(line: &str, offset: usize, msg: &str) -> String {
-        format!(
-            "Ошибка при парсинге диапазонов чисел: {}\n{}\n{}^",
-            msg,
-            line,
-            " ".repeat(offset),
-        )
-    }
-
-    #[inline]
     fn parse_int(s: &str, line: &str) -> anyhow::Result<i128> {
         match s.parse() {
             Ok(num) => Ok(num),
             Err(err) => {
                 let offset = s.as_ptr() as usize - line.as_ptr() as usize;
 
-                Err(anyhow::Error::msg(Self::parse_error(
+                Err(anyhow::Error::msg(format!(
+                    "Ошибка при парсинге диапазонов чисел: {}\n{}\n{}^",
+                    err.to_string(),
                     line,
-                    offset,
-                    &err.to_string(),
+                    " ".repeat(offset),
                 )))
             }
         }
@@ -271,7 +267,7 @@ impl Strategy for IntRanges {
     }
 
     fn validate(&self, text: &BString) -> OpReport {
-        match parse_int(text) {
+        match text.to_str_lossy().parse() {
             Ok(num) => {
                 if self.ranges.iter().any(|range| range.contains(&num)) {
                     OpReport::Success
@@ -289,9 +285,4 @@ impl Strategy for IntRanges {
             },
         }
     }
-}
-
-#[inline]
-fn parse_int(text: &BString) -> anyhow::Result<i128> {
-    Ok(text.to_str_lossy().parse()?)
 }
