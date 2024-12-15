@@ -6,13 +6,10 @@ use gui::AppGui;
 use std::sync::LazyLock;
 use time::format_description::OwnedFormatItem;
 
-pub mod classes;
+pub mod strategies;
 pub mod communicator;
 pub mod gui;
 pub mod runner;
-// pub mod validator;
-// pub mod parser;
-// pub mod generator;
 
 static DATE_FORMAT: LazyLock<OwnedFormatItem> = LazyLock::new(|| {
     time::format_description::parse_owned::<2>("[year]-[month]-[day] [hour]-[minute]-[second]")

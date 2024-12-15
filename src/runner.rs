@@ -1,5 +1,5 @@
 use crate::{
-    classes::{IntRangesArg, PlainTextArg, RegexArg},
+    strategies::{IntRanges, PlainText, RegExpr},
     communicator::{Communicator, History},
     gui::SharedRunnerState,
     DATE_FORMAT,
@@ -51,20 +51,20 @@ pub struct Argument {
 }
 
 impl Argument {
-    fn to_dyn_arg(&self) -> anyhow::Result<Box<dyn ArgumentTrait>> {
+    fn to_strategy(&self) -> anyhow::Result<Box<dyn Strategy>> {
         match self.content_type {
-            ContentType::PlainText => PlainTextArg::parse(&self.text).map(|arg| {
-                let boxed: Box<dyn ArgumentTrait> = Box::new(arg);
+            ContentType::PlainText => PlainText::parse(&self.text).map(|arg| {
+                let boxed: Box<dyn Strategy> = Box::new(arg);
 
                 boxed
             }),
-            ContentType::Regex => RegexArg::parse(&self.text).map(|arg| {
-                let boxed: Box<dyn ArgumentTrait> = Box::new(arg);
+            ContentType::Regex => RegExpr::parse(&self.text).map(|arg| {
+                let boxed: Box<dyn Strategy> = Box::new(arg);
 
                 boxed
             }),
-            ContentType::IntRanges => IntRangesArg::parse(&self.text).map(|arg| {
-                let boxed: Box<dyn ArgumentTrait> = Box::new(arg);
+            ContentType::IntRanges => IntRanges::parse(&self.text).map(|arg| {
+                let boxed: Box<dyn Strategy> = Box::new(arg);
 
                 boxed
             }),
@@ -185,7 +185,7 @@ fn save_to_file(file_prefix: &str, contents: &str) {
     }
 }
 
-pub trait ArgumentTrait: Debug {
+pub trait Strategy: Debug {
     fn parse(text: &str) -> anyhow::Result<Self>
     where
         Self: Sized;
@@ -196,8 +196,8 @@ pub trait ArgumentTrait: Debug {
 
 #[derive(Debug)]
 pub enum Operation {
-    Output(Box<dyn ArgumentTrait>),
-    Input(Box<dyn ArgumentTrait>),
+    Output(Box<dyn Strategy>),
+    Input(Box<dyn Strategy>),
 }
 
 impl Operation {
@@ -206,8 +206,8 @@ impl Operation {
         args.iter()
             .map(|arg| {
                 Ok(match arg.arg_type {
-                    ArgType::Input => Self::Input(arg.to_dyn_arg()?),
-                    ArgType::Output => Self::Output(arg.to_dyn_arg()?),
+                    ArgType::Input => Self::Input(arg.to_strategy()?),
+                    ArgType::Output => Self::Output(arg.to_strategy()?),
                 })
             })
             .collect()

@@ -1,4 +1,4 @@
-use crate::runner::{ArgumentTrait, OpReport};
+use crate::runner::{Strategy, OpReport};
 use bstr::{BString, ByteSlice, ByteVec};
 use rand::{
     rngs::ThreadRng,
@@ -10,16 +10,16 @@ use regex_syntax::hir::{Class, ClassBytes, ClassUnicode, Hir, HirKind};
 use std::ops::RangeInclusive;
 
 #[derive(Debug)]
-pub struct PlainTextArg(String);
+pub struct PlainText(String);
 
-impl PlainTextArg {
+impl PlainText {
     #[inline]
     fn failure_msg(&self) -> String {
         format!("Ожидаемый вывод: \"{}\"", self.0.escape_debug())
     }
 }
 
-impl ArgumentTrait for PlainTextArg {
+impl Strategy for PlainText {
     #[inline]
     fn parse(text: &str) -> anyhow::Result<Self>
     where
@@ -46,12 +46,12 @@ impl ArgumentTrait for PlainTextArg {
 }
 
 #[derive(Debug)]
-pub struct RegexArg {
+pub struct RegExpr {
     regex: Regex,
     syntax: Hir,
 }
 
-impl RegexArg {
+impl RegExpr {
     #[inline]
     fn failure_msg(&self) -> String {
         format!(
@@ -61,7 +61,7 @@ impl RegexArg {
     }
 }
 
-impl ArgumentTrait for RegexArg {
+impl Strategy for RegExpr {
     #[inline]
     fn parse(text: &str) -> anyhow::Result<Self>
     where
@@ -181,12 +181,12 @@ impl Item<'_> {
 }
 
 #[derive(Debug)]
-pub struct IntRangesArg {
+pub struct IntRanges {
     ranges: Vec<RangeInclusive<i128>>,
     orig_text: String,
 }
 
-impl IntRangesArg {
+impl IntRanges {
     #[inline]
     fn failure_msg(&self) -> String {
         format!(
@@ -222,7 +222,7 @@ impl IntRangesArg {
     }
 }
 
-impl ArgumentTrait for IntRangesArg {
+impl Strategy for IntRanges {
     fn parse(text: &str) -> anyhow::Result<Self>
     where
         Self: Sized,
