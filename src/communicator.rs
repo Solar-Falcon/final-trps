@@ -23,12 +23,12 @@ impl Display for Item {
 
 #[derive(Clone, Debug)]
 pub struct History {
-    vec: Vec<Item>,
+    items: Vec<Item>,
 }
 
 impl Display for History {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for item in self.vec.iter() {
+        for item in self.items.iter() {
             writeln!(f, "{}", item)?;
         }
 
@@ -46,7 +46,7 @@ impl Communicator {
     pub fn new(command: &mut Command) -> Result<Self> {
         Ok(Self {
             process: command.spawn()?,
-            history: History { vec: Vec::new() },
+            history: History { items: Vec::new() },
         })
     }
 
@@ -61,7 +61,7 @@ impl Communicator {
         BufReader::new(stdout).read_until(b'\n', &mut buffer)?;
 
         let string = BString::from(buffer.as_bstr().trim_end());
-        self.history.vec.push(Item::Stdout(string.clone()));
+        self.history.items.push(Item::Stdout(string.clone()));
 
         Ok(string)
     }
@@ -76,7 +76,7 @@ impl Communicator {
         stdin.write_all(&line)?;
         stdin.write_all(b"\n")?;
 
-        self.history.vec.push(Item::Stdin(line));
+        self.history.items.push(Item::Stdin(line));
 
         Ok(())
     }

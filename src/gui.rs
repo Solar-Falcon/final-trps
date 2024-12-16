@@ -94,7 +94,7 @@ impl UiArgumentPanel {
     }
 
     fn display(&mut self, ui: &mut egui::Ui) {
-        ui.label("Входные/выходные параметры программы");
+        ui.label("Список стратегий");
 
         self.display_arg_creation(ui);
 
@@ -117,18 +117,18 @@ impl UiArgumentPanel {
             }
 
             if !self.args.is_empty() {
-                if ui.button("Добавить после текущего").clicked() {
+                if ui.button("Добавить после выбранной").clicked() {
                     self.cursor += 1;
                     self.args.insert(self.cursor, Default::default());
                 }
 
-                if ui.button("Добавить перед текущим").clicked() {
+                if ui.button("Добавить перед выбранной").clicked() {
                     self.args.insert(self.cursor, Default::default());
                 }
             }
         });
 
-        if ui.button("Удалить текущий").clicked() {
+        if ui.button("Удалить выбранную стратегию").clicked() {
             self.args.remove(self.cursor);
             self.shift_cursor_up(); // when we remove the last arg, cursor points to nothing
         }
@@ -136,7 +136,7 @@ impl UiArgumentPanel {
 
     fn display_main_panel(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            egui::ComboBox::from_label("Выбор параметра").show_index(
+            egui::ComboBox::from_label("Стратегии").show_index(
                 ui,
                 &mut self.cursor,
                 self.args.len(),
@@ -163,7 +163,7 @@ impl UiArgumentPanel {
                 });
 
                 ui.horizontal(|ui| {
-                    ui.label("Тип содержимого: ");
+                    ui.label("Тип данных: ");
                     ui.radio_value(&mut arg.content_type, ContentType::PlainText, "Текст");
                     ui.radio_value(
                         &mut arg.content_type,
