@@ -20,7 +20,6 @@ fn main() {
     let native_options = NativeOptions {
         viewport: ViewportBuilder {
             title: Some("Программа автоматизации тестирования ПО".to_owned()),
-            drag_and_drop: Some(true),
             min_inner_size: Some(Vec2::new(1200.0, 600.0)),
             ..Default::default()
         },
