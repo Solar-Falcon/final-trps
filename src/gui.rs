@@ -132,7 +132,7 @@ impl UiArgumentPanel {
                     self.args.insert(self.cursor, Default::default());
                 }
 
-                if ui.button("Добавить перед выбранного").clicked() {
+                if ui.button("Добавить перед выбранным").clicked() {
                     self.args.insert(self.cursor, Default::default());
                 }
             }
