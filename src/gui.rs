@@ -94,7 +94,7 @@ impl UiArgumentPanel {
     }
 
     fn display(&mut self, ui: &mut egui::Ui) {
-        ui.label("Список стратегий");
+        ui.label("Список правил");
 
         self.display_arg_creation(ui);
 
@@ -128,7 +128,7 @@ impl UiArgumentPanel {
             }
         });
 
-        if ui.button("Удалить выбранную стратегию").clicked() {
+        if ui.button("Удалить выбранное правило").clicked() {
             self.args.remove(self.cursor);
             self.shift_cursor_up(); // when we remove the last arg, cursor points to nothing
         }
@@ -136,7 +136,7 @@ impl UiArgumentPanel {
 
     fn display_main_panel(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            egui::ComboBox::from_label("Стратегии").show_index(
+            egui::ComboBox::from_label("Правила").show_index(
                 ui,
                 &mut self.cursor,
                 self.args.len(),
