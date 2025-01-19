@@ -1,5 +1,5 @@
 use crate::{
-    strategies::{IntRanges, PlainText, RegExpr},
+    rules::{IntRanges, PlainText, RegExpr},
     communicator::{Communicator, History},
     gui::SharedRunnerState,
     DATE_FORMAT,
@@ -51,20 +51,20 @@ pub struct Argument {
 }
 
 impl Argument {
-    fn to_strategy(&self) -> anyhow::Result<Box<dyn Strategy>> {
+    fn to_rule(&self) -> anyhow::Result<Box<dyn Rule>> {
         match self.content_type {
             ContentType::PlainText => PlainText::parse(&self.text).map(|arg| {
-                let boxed: Box<dyn Strategy> = Box::new(arg);
+                let boxed: Box<dyn Rule> = Box::new(arg);
 
                 boxed
             }),
             ContentType::Regex => RegExpr::parse(&self.text).map(|arg| {
-                let boxed: Box<dyn Strategy> = Box::new(arg);
+                let boxed: Box<dyn Rule> = Box::new(arg);
 
                 boxed
             }),
             ContentType::IntRanges => IntRanges::parse(&self.text).map(|arg| {
-                let boxed: Box<dyn Strategy> = Box::new(arg);
+                let boxed: Box<dyn Rule> = Box::new(arg);
 
                 boxed
             }),
@@ -185,7 +185,7 @@ fn save_to_file(file_prefix: &str, contents: &str) {
     }
 }
 
-pub trait Strategy: Debug {
+pub trait Rule: Debug {
     fn parse(text: &str) -> anyhow::Result<Self>
     where
         Self: Sized;
@@ -196,8 +196,8 @@ pub trait Strategy: Debug {
 
 #[derive(Debug)]
 pub enum Operation {
-    Output(Box<dyn Strategy>),
-    Input(Box<dyn Strategy>),
+    Output(Box<dyn Rule>),
+    Input(Box<dyn Rule>),
 }
 
 impl Operation {
@@ -206,8 +206,8 @@ impl Operation {
         args.iter()
             .map(|arg| {
                 Ok(match arg.arg_type {
-                    ArgType::Input => Self::Input(arg.to_strategy()?),
-                    ArgType::Output => Self::Output(arg.to_strategy()?),
+                    ArgType::Input => Self::Input(arg.to_rule()?),
+                    ArgType::Output => Self::Output(arg.to_rule()?),
                 })
             })
             .collect()

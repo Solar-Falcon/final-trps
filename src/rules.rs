@@ -1,4 +1,4 @@
-use crate::runner::{OpReport, Strategy};
+use crate::runner::{OpReport, Rule};
 use bstr::{BString, ByteSlice, ByteVec};
 use rand::{
     rngs::ThreadRng,
@@ -19,7 +19,7 @@ impl PlainText {
     }
 }
 
-impl Strategy for PlainText {
+impl Rule for PlainText {
     #[inline]
     fn parse(text: &str) -> anyhow::Result<Self>
     where
@@ -94,7 +94,7 @@ impl RegExpr {
     }
 }
 
-impl Strategy for RegExpr {
+impl Rule for RegExpr {
     #[inline]
     fn parse(text: &str) -> anyhow::Result<Self>
     where
@@ -218,7 +218,7 @@ impl IntRanges {
     }
 }
 
-impl Strategy for IntRanges {
+impl Rule for IntRanges {
     fn parse(text: &str) -> anyhow::Result<Self>
     where
         Self: Sized,

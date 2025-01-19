@@ -6,7 +6,7 @@ use gui::AppGui;
 use std::sync::LazyLock;
 use time::format_description::OwnedFormatItem;
 
-pub mod strategies;
+pub mod rules;
 pub mod communicator;
 pub mod gui;
 pub mod runner;
