@@ -1,7 +1,7 @@
 use crate::{
-    rules::{IntRanges, PlainText, RegExpr},
     communicator::{Communicator, History},
     gui::SharedRunnerState,
+    rules::{IntRanges, PlainText, RegExpr},
     DATE_FORMAT,
 };
 use bstr::BString;

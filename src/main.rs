@@ -6,9 +6,9 @@ use gui::AppGui;
 use std::sync::LazyLock;
 use time::format_description::OwnedFormatItem;
 
-pub mod rules;
 pub mod communicator;
 pub mod gui;
+pub mod rules;
 pub mod runner;
 
 static DATE_FORMAT: LazyLock<OwnedFormatItem> = LazyLock::new(|| {

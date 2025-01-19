@@ -13,8 +13,8 @@ regex-syntax = "0.8"
 regex = "1.11"
 time = { version = "0.3", features = ["formatting"] }
 
-eframe = "0.29"
-egui-file-dialog = "0.7"
+eframe = "0.30"
+egui-file-dialog = "0.8"
 
 [profile.dev]
 opt-level = 2

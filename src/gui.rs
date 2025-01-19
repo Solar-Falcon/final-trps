@@ -45,12 +45,12 @@ impl UiFileSelect {
     fn display(&mut self, ctx: &egui::Context, ui: &mut egui::Ui) {
         if ui.button("Выбрать тестируемый исполняемый файл").clicked()
         {
-            self.file_dialog.select_file();
+            self.file_dialog.pick_file();
         }
 
         self.file_dialog.update(ctx);
 
-        if let Some(path) = self.file_dialog.take_selected() {
+        if let Some(path) = self.file_dialog.take_picked() {
             self.program_file = Some(path);
         }
 
