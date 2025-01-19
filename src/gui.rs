@@ -94,8 +94,6 @@ impl UiArgumentPanel {
     }
 
     fn display(&mut self, ui: &mut egui::Ui) {
-        ui.label("Список правил");
-
         self.display_arg_creation(ui);
 
         ui.separator();
@@ -110,6 +108,18 @@ impl UiArgumentPanel {
     }
 
     fn display_arg_creation(&mut self, ui: &mut egui::Ui) {
+        egui::ComboBox::from_label("Список правил").show_index(
+            ui,
+            &mut self.cursor,
+            self.args.len(),
+            |i| {
+                self.args
+                    .get(i)
+                    .map(|arg| arg.name.as_str())
+                    .unwrap_or("Ничего нет!")
+            },
+        );
+
         ui.horizontal(|ui| {
             if ui.button("Добавить в конец списка").clicked() {
                 self.args.push(Default::default());
@@ -136,18 +146,6 @@ impl UiArgumentPanel {
 
     fn display_main_panel(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            egui::ComboBox::from_label("Правила").show_index(
-                ui,
-                &mut self.cursor,
-                self.args.len(),
-                |i| {
-                    self.args
-                        .get(i)
-                        .map(|arg| arg.name.as_str())
-                        .unwrap_or("Ничего нет!")
-                },
-            );
-
             if self.cursor < self.args.len() {
                 let arg = &mut self.args[self.cursor];
 
