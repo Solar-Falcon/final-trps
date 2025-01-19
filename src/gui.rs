@@ -171,7 +171,7 @@ impl UiArgumentPanel {
                     ui.radio_value(&mut arg.content_type, ContentType::IntRanges, "Целые числа");
                 });
 
-                let text_edit = egui::TextEdit::multiline(&mut arg.text).code_editor();
+                let text_edit = egui::TextEdit::singleline(&mut arg.text).code_editor();
 
                 ui.add(text_edit);
             }
