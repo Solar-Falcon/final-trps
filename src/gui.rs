@@ -386,6 +386,7 @@ impl AppGui {
             .work_state
             .required_tests
             .load(Ordering::Acquire);
+
         let progress = (tests_solved as f32) / (tests_required as f32);
 
         let progress_bar = egui::ProgressBar::new(progress)

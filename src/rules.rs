@@ -103,6 +103,7 @@ impl Rule for RegExpr {
         let syntax = regex_syntax::ParserBuilder::new()
             .ignore_whitespace(true)
             .multi_line(false)
+            .unicode(false)
             .build()
             .parse(text)?;
 

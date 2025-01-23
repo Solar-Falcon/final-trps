@@ -1,5 +1,5 @@
 use crate::{
-    communicator::{Communicator, History},
+    communicator::{CommReport, Communicator, History},
     gui::SharedRunnerState,
     rules::{IntRanges, PlainText, RegExpr},
     DATE_FORMAT,
@@ -139,7 +139,7 @@ impl Runner {
             }
         }
 
-        save_to_file(
+        Self::save_to_file(
             "Успехи",
             &success_histories.join("\n#====================#\n"),
         );
@@ -159,7 +159,7 @@ impl Runner {
             match op.exec(&mut comm)? {
                 OpReport::Success => {}
                 OpReport::Failure { error_message } => {
-                    save_to_file("Ошибки", &format!("{}\n{}", &comm.history, &error_message));
+                    Self::save_to_file("Ошибки", &format!("{}\n{}", &comm.history, &error_message));
 
                     return Ok(TestReport::Failure {
                         history: comm.history,
@@ -169,19 +169,35 @@ impl Runner {
             }
         }
 
-        success_histories.push(comm.history.to_string());
+        let report = comm.finish()?;
 
-        Ok(TestReport::Success)
+        match report {
+            CommReport::Success(history) => {
+                success_histories.push(history.to_string());
+                Ok(TestReport::Success)
+            }
+            CommReport::NonEmptyStdout(history) => {
+                let error_message = "Программа вывела лишние данные";
+
+                Self::save_to_file("Ошибки", &format!("{}\n{}", &history, &error_message));
+                Ok(TestReport::Failure { history, error_message: error_message.to_string() })
+            }
+            CommReport::ProgramError(history, stderr) => {
+                let error_message = format!("Программа не была успешно завершена:\n{}", stderr);
+
+                Ok(TestReport::Failure { history, error_message })
+            }
+        }
     }
-}
 
-fn save_to_file(file_prefix: &str, contents: &str) {
-    let date = time::OffsetDateTime::now_utc();
+    fn save_to_file(file_prefix: &str, contents: &str) {
+        let date = time::OffsetDateTime::now_utc();
 
-    let file_name = format!("{} {}.txt", file_prefix, date.format(&DATE_FORMAT).unwrap());
+        let file_name = format!("{} {}.txt", file_prefix, date.format(&DATE_FORMAT).unwrap());
 
-    if fs::write(file_name, contents).is_err() {
-        eprintln!("Не удалось сохранить данные в файл!");
+        if fs::write(file_name, contents).is_err() {
+            eprintln!("Не удалось сохранить данные в файл!");
+        }
     }
 }
 
@@ -203,7 +219,8 @@ pub enum Operation {
 impl Operation {
     #[inline]
     fn process(rules: &[RuleData]) -> anyhow::Result<Vec<Self>> {
-        rules.iter()
+        rules
+            .iter()
             .map(|rule| {
                 Ok(match rule.rule_type {
                     RuleType::Input => Self::Input(rule.to_rule()?),

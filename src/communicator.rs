@@ -3,7 +3,7 @@ use bstr::{BString, ByteSlice};
 use std::{
     fmt::Display,
     io::{BufRead, BufReader, Write},
-    process::{Child, Command},
+    process::{Child, ChildStdin, ChildStdout, Command},
 };
 
 #[derive(Clone, Debug)]
@@ -38,27 +38,30 @@ impl Display for History {
 
 pub struct Communicator {
     process: Child,
+    reader: BufReader<ChildStdout>,
+    writer: ChildStdin,
     pub history: History,
 }
 
 impl Communicator {
     #[inline]
     pub fn new(command: &mut Command) -> Result<Self> {
+        let mut process = command.spawn()?;
+
         Ok(Self {
-            process: command.spawn()?,
+            reader: BufReader::new(process
+                .stdout
+                .take()
+                .ok_or(Error::msg("program stdout unavailable"))?),
+            writer: process.stdin.take().ok_or(Error::msg("program stdin unavailable"))?,
+            process,
             history: History { items: Vec::new() },
         })
     }
 
     pub fn read_line(&mut self) -> Result<BString> {
-        let stdout = self
-            .process
-            .stdout
-            .as_mut()
-            .ok_or(Error::msg("program stdout unavailable"))?;
-
         let mut buffer = Vec::new();
-        BufReader::new(stdout).read_until(b'\n', &mut buffer)?;
+        self.reader.read_until(b'\n', &mut buffer)?;
 
         let string = BString::from(buffer.as_bstr().trim_end());
         self.history.items.push(Item::Stdout(string.clone()));
@@ -66,18 +69,42 @@ impl Communicator {
         Ok(string)
     }
 
-    pub fn write_line(&mut self, line: BString) -> Result<()> {
-        let stdin = self
-            .process
-            .stdin
-            .as_mut()
-            .ok_or(Error::msg("program stdin unavailable"))?;
-
-        stdin.write_all(&line)?;
-        stdin.write_all(b"\n")?;
+    pub fn write_line(&mut self, mut line: BString) -> Result<()> {
+        line.push(b'\n');
+        self.writer.write_all(&line)?;
 
         self.history.items.push(Item::Stdin(line));
 
         Ok(())
     }
+
+    pub fn finish(mut self) -> Result<CommReport> {
+        let output = self.process.wait_with_output()?;
+
+        let stdout_empty;
+        if !output.stdout.is_empty() {
+            stdout_empty = false;
+            self.history.items.push(Item::Stdout(BString::new(output.stdout)));
+        } else {
+            stdout_empty = true;
+        }
+
+        if output.status.success() {
+            if stdout_empty {
+                Ok(CommReport::Success(self.history))
+            } else {
+                Ok(CommReport::NonEmptyStdout(self.history))
+            }
+        } else {
+            let stderr = BString::new(output.stderr);
+            Ok(CommReport::ProgramError(self.history, stderr))
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum CommReport {
+    Success(History),
+    NonEmptyStdout(History),
+    ProgramError(History, BString),
 }
