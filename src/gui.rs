@@ -1,4 +1,4 @@
-use crate::runner::{ArgType, Argument, ContentType, Runner, TestReport, TestingData};
+use crate::runner::{ArgType, UiRuleData, ContentType, Runner, TestReport, TestingData};
 use anyhow::Result;
 use eframe::{
     egui::{self, Color32},
@@ -13,27 +13,6 @@ use std::{
         Arc,
     },
 };
-
-#[derive(Debug, Default)]
-pub struct SharedRunnerState {
-    pub solved_tests: AtomicU32,
-    pub required_tests: AtomicU32,
-}
-
-impl SharedRunnerState {
-    #[inline]
-    pub fn reset(&self) {
-        self.solved_tests.store(0, Ordering::Release);
-        self.required_tests.store(0, Ordering::Release);
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum AppState {
-    Idle,
-    Working,
-    Finished,
-}
 
 #[derive(Debug, Default)]
 struct UiFileSelect {
@@ -74,12 +53,12 @@ impl UiFileSelect {
 }
 
 #[derive(Debug, Default)]
-struct UiArgumentPanel {
+struct UiRulePanel {
     cursor: usize,
-    args: Vec<Argument>,
+    rules: Vec<UiRuleData>,
 }
 
-impl UiArgumentPanel {
+impl UiRulePanel {
     #[inline]
     fn shift_cursor_up(&mut self) {
         self.cursor = self.cursor.saturating_sub(1);
@@ -90,11 +69,11 @@ impl UiArgumentPanel {
         self.cursor = self
             .cursor
             .saturating_add(1)
-            .min(self.args.len().saturating_sub(1));
+            .min(self.rules.len().saturating_sub(1));
     }
 
     fn display(&mut self, ui: &mut egui::Ui) {
-        self.display_arg_creation(ui);
+        self.display_rule_creation(ui);
 
         ui.separator();
 
@@ -103,82 +82,82 @@ impl UiArgumentPanel {
 
             ui.separator();
 
-            self.display_argument_list(ui);
+            self.display_rule_list(ui);
         });
     }
 
-    fn display_arg_creation(&mut self, ui: &mut egui::Ui) {
+    fn display_rule_creation(&mut self, ui: &mut egui::Ui) {
         egui::ComboBox::from_label("Список правил").show_index(
             ui,
             &mut self.cursor,
-            self.args.len(),
+            self.rules.len(),
             |i| {
-                self.args
+                self.rules
                     .get(i)
-                    .map(|arg| arg.name.as_str())
+                    .map(|rule| rule.name.as_str())
                     .unwrap_or("Ничего нет!")
             },
         );
 
         ui.horizontal(|ui| {
             if ui.button("Добавить в конец списка").clicked() {
-                self.args.push(Default::default());
-                self.cursor = self.args.len() - 1; // cursor on the new argument
+                self.rules.push(Default::default());
+                self.cursor = self.rules.len() - 1; // cursor on the new rule
             }
 
-            if !self.args.is_empty() {
+            if !self.rules.is_empty() {
                 if ui.button("Добавить после выбранного").clicked() {
                     self.cursor += 1;
-                    self.args.insert(self.cursor, Default::default());
+                    self.rules.insert(self.cursor, Default::default());
                 }
 
                 if ui.button("Добавить перед выбранным").clicked() {
-                    self.args.insert(self.cursor, Default::default());
+                    self.rules.insert(self.cursor, Default::default());
                 }
             }
         });
 
         if ui.button("Удалить выбранное правило").clicked() {
-            self.args.remove(self.cursor);
-            self.shift_cursor_up(); // when we remove the last arg, cursor points to nothing
+            self.rules.remove(self.cursor);
+            self.shift_cursor_up(); // when we remove the last rule, cursor points to nothing
         }
     }
 
     fn display_main_panel(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
-            if self.cursor < self.args.len() {
-                let arg = &mut self.args[self.cursor];
+            if self.cursor < self.rules.len() {
+                let rule = &mut self.rules[self.cursor];
 
                 ui.horizontal(|ui| {
                     ui.label("Название: ");
-                    ui.text_edit_singleline(&mut arg.name);
+                    ui.text_edit_singleline(&mut rule.name);
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("Тип параметра: ");
-                    ui.radio_value(&mut arg.arg_type, ArgType::Input, "Входной");
-                    ui.radio_value(&mut arg.arg_type, ArgType::Output, "Выходной");
+                    ui.radio_value(&mut rule.arg_type, ArgType::Input, "Входной");
+                    ui.radio_value(&mut rule.arg_type, ArgType::Output, "Выходной");
                 });
 
                 ui.horizontal(|ui| {
                     ui.label("Тип данных: ");
-                    ui.radio_value(&mut arg.content_type, ContentType::PlainText, "Текст");
+                    ui.radio_value(&mut rule.content_type, ContentType::PlainText, "Текст");
                     ui.radio_value(
-                        &mut arg.content_type,
+                        &mut rule.content_type,
                         ContentType::Regex,
                         "Регулярное выражение",
                     );
-                    ui.radio_value(&mut arg.content_type, ContentType::IntRanges, "Целые числа");
+                    ui.radio_value(&mut rule.content_type, ContentType::IntRanges, "Целые числа");
                 });
 
-                let text_edit = egui::TextEdit::singleline(&mut arg.text).code_editor();
+                let text_edit = egui::TextEdit::singleline(&mut rule.text).code_editor();
 
                 ui.add(text_edit);
             }
         });
     }
 
-    fn display_argument_list(&mut self, ui: &mut egui::Ui) {
+    fn display_rule_list(&mut self, ui: &mut egui::Ui) {
         ui.vertical(|ui| {
             ui.label("Навигация");
 
@@ -197,26 +176,40 @@ impl UiArgumentPanel {
 
                     if ui.button("Сдвинуть вверх").clicked() {
                         self.shift_cursor_up();
-                        self.args.swap(current, self.cursor);
+                        self.rules.swap(current, self.cursor);
                     }
 
                     if ui.button("Сдвинуть вниз").clicked() {
                         self.shift_cursor_down();
-                        self.args.swap(current, self.cursor);
+                        self.rules.swap(current, self.cursor);
                     }
                 });
             });
 
             ui.separator();
 
-            for (i, arg) in self.args.iter().enumerate() {
+            for (i, rule) in self.rules.iter().enumerate() {
                 if i == self.cursor {
-                    ui.label(format!("> {} ({})", &arg.name, &arg.arg_type));
+                    ui.label(format!("> {} ({})", &rule.name, &rule.arg_type));
                 } else {
-                    ui.label(format!("- {} ({})", &arg.name, &arg.arg_type));
+                    ui.label(format!("- {} ({})", &rule.name, &rule.arg_type));
                 }
             }
         });
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct SharedRunnerState {
+    pub solved_tests: AtomicU32,
+    pub required_tests: AtomicU32,
+}
+
+impl SharedRunnerState {
+    #[inline]
+    pub fn reset(&self) {
+        self.solved_tests.store(0, Ordering::Release);
+        self.required_tests.store(0, Ordering::Release);
     }
 }
 
@@ -291,6 +284,14 @@ impl RunManager {
     }
 }
 
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum AppState {
+    Idle,
+    Working,
+    Finished,
+}
+
 #[derive(Debug)]
 pub struct AppGui {
     run_manager: RunManager,
@@ -298,7 +299,7 @@ pub struct AppGui {
     state: AppState,
 
     ui_file_select: UiFileSelect,
-    ui_arg_panel: UiArgumentPanel,
+    ui_arg_panel: UiRulePanel,
 }
 
 impl AppGui {
@@ -320,7 +321,7 @@ impl AppGui {
     fn collect_testing_data(&self) -> TestingData {
         TestingData {
             program_path: self.ui_file_select.program_file.as_ref().unwrap().clone(),
-            args: self.ui_arg_panel.args.clone(),
+            rules: self.ui_arg_panel.rules.clone(),
             successes_required: self.successes_required,
         }
     }

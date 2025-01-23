@@ -43,28 +43,28 @@ pub enum ContentType {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct Argument {
+pub struct UiRuleData {
     pub name: String,
     pub arg_type: ArgType,
     pub content_type: ContentType,
     pub text: String,
 }
 
-impl Argument {
+impl UiRuleData {
     fn to_rule(&self) -> anyhow::Result<Box<dyn Rule>> {
         match self.content_type {
-            ContentType::PlainText => PlainText::parse(&self.text).map(|arg| {
-                let boxed: Box<dyn Rule> = Box::new(arg);
+            ContentType::PlainText => PlainText::parse(&self.text).map(|rule| {
+                let boxed: Box<dyn Rule> = Box::new(rule);
 
                 boxed
             }),
-            ContentType::Regex => RegExpr::parse(&self.text).map(|arg| {
-                let boxed: Box<dyn Rule> = Box::new(arg);
+            ContentType::Regex => RegExpr::parse(&self.text).map(|rule| {
+                let boxed: Box<dyn Rule> = Box::new(rule);
 
                 boxed
             }),
-            ContentType::IntRanges => IntRanges::parse(&self.text).map(|arg| {
-                let boxed: Box<dyn Rule> = Box::new(arg);
+            ContentType::IntRanges => IntRanges::parse(&self.text).map(|rule| {
+                let boxed: Box<dyn Rule> = Box::new(rule);
 
                 boxed
             }),
@@ -75,7 +75,7 @@ impl Argument {
 #[derive(Debug)]
 pub struct TestingData {
     pub program_path: PathBuf,
-    pub args: Vec<Argument>,
+    pub rules: Vec<UiRuleData>,
     pub successes_required: u32,
 }
 
@@ -121,7 +121,7 @@ impl Runner {
         let mut command = Command::new(testing_data.program_path);
         command.stdin(Stdio::piped()).stdout(Stdio::piped());
 
-        let ops = Operation::process(&testing_data.args)?;
+        let ops = Operation::process(&testing_data.rules)?;
 
         self.work_state
             .required_tests
@@ -202,12 +202,12 @@ pub enum Operation {
 
 impl Operation {
     #[inline]
-    fn process(args: &[Argument]) -> anyhow::Result<Vec<Self>> {
-        args.iter()
-            .map(|arg| {
-                Ok(match arg.arg_type {
-                    ArgType::Input => Self::Input(arg.to_rule()?),
-                    ArgType::Output => Self::Output(arg.to_rule()?),
+    fn process(rules: &[UiRuleData]) -> anyhow::Result<Vec<Self>> {
+        rules.iter()
+            .map(|rule| {
+                Ok(match rule.arg_type {
+                    ArgType::Input => Self::Input(rule.to_rule()?),
+                    ArgType::Output => Self::Output(rule.to_rule()?),
                 })
             })
             .collect()
@@ -215,17 +215,17 @@ impl Operation {
 
     fn exec(&self, comm: &mut Communicator) -> anyhow::Result<OpReport> {
         match self {
-            Self::Input(arg) => {
-                let string = arg.generate();
+            Self::Input(rule) => {
+                let string = rule.generate();
 
                 comm.write_line(string)?;
 
                 Ok(OpReport::Success)
             }
-            Self::Output(arg) => {
+            Self::Output(rule) => {
                 let text = comm.read_line()?;
 
-                Ok(arg.validate(&text))
+                Ok(rule.validate(&text))
             }
         }
     }
