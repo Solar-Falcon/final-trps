@@ -1,4 +1,4 @@
-use crate::runner::{ArgType, UiRuleData, ContentType, Runner, TestReport, TestingData};
+use crate::runner::{RuleType, UiRuleData, ContentType, Runner, TestReport, TestingData};
 use anyhow::Result;
 use eframe::{
     egui::{self, Color32},
@@ -135,8 +135,8 @@ impl UiRulePanel {
 
                 ui.horizontal(|ui| {
                     ui.label("Тип параметра: ");
-                    ui.radio_value(&mut rule.arg_type, ArgType::Input, "Входной");
-                    ui.radio_value(&mut rule.arg_type, ArgType::Output, "Выходной");
+                    ui.radio_value(&mut rule.rule_type, RuleType::Input, "Входной");
+                    ui.radio_value(&mut rule.rule_type, RuleType::Output, "Выходной");
                 });
 
                 ui.horizontal(|ui| {
@@ -190,9 +190,9 @@ impl UiRulePanel {
 
             for (i, rule) in self.rules.iter().enumerate() {
                 if i == self.cursor {
-                    ui.label(format!("> {} ({})", &rule.name, &rule.arg_type));
+                    ui.label(format!("> {} ({})", &rule.name, &rule.rule_type));
                 } else {
-                    ui.label(format!("- {} ({})", &rule.name, &rule.arg_type));
+                    ui.label(format!("- {} ({})", &rule.name, &rule.rule_type));
                 }
             }
         });
@@ -299,7 +299,7 @@ pub struct AppGui {
     state: AppState,
 
     ui_file_select: UiFileSelect,
-    ui_arg_panel: UiRulePanel,
+    ui_rule_panel: UiRulePanel,
 }
 
 impl AppGui {
@@ -313,7 +313,7 @@ impl AppGui {
             state: AppState::Idle,
 
             ui_file_select: Default::default(),
-            ui_arg_panel: Default::default(),
+            ui_rule_panel: Default::default(),
         })
     }
 
@@ -321,7 +321,7 @@ impl AppGui {
     fn collect_testing_data(&self) -> TestingData {
         TestingData {
             program_path: self.ui_file_select.program_file.as_ref().unwrap().clone(),
-            rules: self.ui_arg_panel.rules.clone(),
+            rules: self.ui_rule_panel.rules.clone(),
             successes_required: self.successes_required,
         }
     }
@@ -332,7 +332,7 @@ impl AppGui {
         if self.ui_file_select.is_file_selected() {
             ui.separator();
 
-            self.ui_arg_panel.display(ui);
+            self.ui_rule_panel.display(ui);
 
             ui.separator();
 

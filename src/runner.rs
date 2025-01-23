@@ -19,13 +19,13 @@ use std::{
 };
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
-pub enum ArgType {
+pub enum RuleType {
     #[default]
     Input,
     Output,
 }
 
-impl Display for ArgType {
+impl Display for RuleType {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Input => write!(f, "входное"),
@@ -45,7 +45,7 @@ pub enum ContentType {
 #[derive(Clone, Debug, Default)]
 pub struct UiRuleData {
     pub name: String,
-    pub arg_type: ArgType,
+    pub rule_type: RuleType,
     pub content_type: ContentType,
     pub text: String,
 }
@@ -205,9 +205,9 @@ impl Operation {
     fn process(rules: &[UiRuleData]) -> anyhow::Result<Vec<Self>> {
         rules.iter()
             .map(|rule| {
-                Ok(match rule.arg_type {
-                    ArgType::Input => Self::Input(rule.to_rule()?),
-                    ArgType::Output => Self::Output(rule.to_rule()?),
+                Ok(match rule.rule_type {
+                    RuleType::Input => Self::Input(rule.to_rule()?),
+                    RuleType::Output => Self::Output(rule.to_rule()?),
                 })
             })
             .collect()
