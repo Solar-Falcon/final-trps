@@ -1,4 +1,4 @@
-use crate::runner::{RuleType, UiRuleData, ContentType, Runner, TestReport, TestingData};
+use crate::runner::{RuleType, RuleData, ContentType, Runner, TestReport, TestingData};
 use anyhow::Result;
 use eframe::{
     egui::{self, Color32},
@@ -55,7 +55,7 @@ impl UiFileSelect {
 #[derive(Debug, Default)]
 struct UiRulePanel {
     cursor: usize,
-    rules: Vec<UiRuleData>,
+    rules: Vec<RuleData>,
 }
 
 impl UiRulePanel {
@@ -283,7 +283,6 @@ impl RunManager {
         }
     }
 }
-
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum AppState {

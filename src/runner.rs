@@ -43,14 +43,14 @@ pub enum ContentType {
 }
 
 #[derive(Clone, Debug, Default)]
-pub struct UiRuleData {
+pub struct RuleData {
     pub name: String,
     pub rule_type: RuleType,
     pub content_type: ContentType,
     pub text: String,
 }
 
-impl UiRuleData {
+impl RuleData {
     fn to_rule(&self) -> anyhow::Result<Box<dyn Rule>> {
         match self.content_type {
             ContentType::PlainText => PlainText::parse(&self.text).map(|rule| {
@@ -75,7 +75,7 @@ impl UiRuleData {
 #[derive(Debug)]
 pub struct TestingData {
     pub program_path: PathBuf,
-    pub rules: Vec<UiRuleData>,
+    pub rules: Vec<RuleData>,
     pub successes_required: u32,
 }
 
@@ -202,7 +202,7 @@ pub enum Operation {
 
 impl Operation {
     #[inline]
-    fn process(rules: &[UiRuleData]) -> anyhow::Result<Vec<Self>> {
+    fn process(rules: &[RuleData]) -> anyhow::Result<Vec<Self>> {
         rules.iter()
             .map(|rule| {
                 Ok(match rule.rule_type {
