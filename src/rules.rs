@@ -210,10 +210,10 @@ impl IntRanges {
                 let offset = s.as_ptr() as usize - line.as_ptr() as usize;
 
                 Err(anyhow::Error::msg(format!(
-                    "Ошибка при парсинге диапазонов чисел: {}\n{}\n{}^",
+                    "Ошибка при обработке диапазонов чисел: {}\n{}\n{}^",
                     err.to_string(),
                     line,
-                    " ".repeat(offset),
+                    "\u{2002}".repeat(offset),
                 )))
             }
         }
