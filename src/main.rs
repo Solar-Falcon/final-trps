@@ -9,7 +9,8 @@ use time::format_description::OwnedFormatItem;
 pub mod communicator;
 pub mod gui;
 pub mod rules;
-pub mod runner;
+pub mod run_manager;
+pub mod worker_thread;
 
 static DATE_FORMAT: LazyLock<OwnedFormatItem> = LazyLock::new(|| {
     time::format_description::parse_owned::<2>("[year]-[month]-[day] [hour]-[minute]-[second]")

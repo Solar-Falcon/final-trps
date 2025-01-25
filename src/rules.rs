@@ -1,4 +1,4 @@
-use crate::runner::{OpReport, Rule};
+use crate::worker_thread::{OpReport, Rule};
 use bstr::{BString, ByteSlice, ByteVec};
 use rand::{
     rngs::ThreadRng,
@@ -100,7 +100,7 @@ impl Rule for RegExpr {
         let syntax = regex_syntax::ParserBuilder::new()
             .ignore_whitespace(true)
             .multi_line(false)
-            .unicode(false)
+            .unicode(true)
             .build()
             .parse(text)?;
 

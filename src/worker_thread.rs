@@ -1,12 +1,13 @@
 use crate::{
     communicator::{CommReport, Communicator, History},
-    gui::SharedRunnerState,
+    gui::{ContentType, RuleData, RuleType},
     rules::{IntRanges, PlainText, RegExpr},
+    run_manager::SharedRunnerState,
     DATE_FORMAT,
 };
 use bstr::BString;
 use std::{
-    fmt::{Debug, Display},
+    fmt::Debug,
     fs,
     path::PathBuf,
     process::{Command, Stdio},
@@ -17,60 +18,6 @@ use std::{
     },
     thread,
 };
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
-pub enum RuleType {
-    #[default]
-    Input,
-    Output,
-}
-
-impl Display for RuleType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::Input => write!(f, "входное"),
-            Self::Output => write!(f, "выходное"),
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, Hash)]
-pub enum ContentType {
-    #[default]
-    PlainText,
-    Regex,
-    IntRanges,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct RuleData {
-    pub name: String,
-    pub rule_type: RuleType,
-    pub content_type: ContentType,
-    pub text: String,
-}
-
-impl RuleData {
-    fn to_rule(&self) -> anyhow::Result<Box<dyn Rule>> {
-        match self.content_type {
-            ContentType::PlainText => PlainText::parse(&self.text).map(|rule| {
-                let boxed: Box<dyn Rule> = Box::new(rule);
-
-                boxed
-            }),
-            ContentType::Regex => RegExpr::parse(&self.text).map(|rule| {
-                let boxed: Box<dyn Rule> = Box::new(rule);
-
-                boxed
-            }),
-            ContentType::IntRanges => IntRanges::parse(&self.text).map(|rule| {
-                let boxed: Box<dyn Rule> = Box::new(rule);
-
-                boxed
-            }),
-        }
-    }
-}
 
 #[derive(Debug)]
 pub struct TestingData {
@@ -139,7 +86,7 @@ impl Runner {
             }
         }
 
-        Self::save_to_file(
+        save_to_file(
             "Успехи",
             &success_histories.join("\n#====================#\n"),
         );
@@ -159,7 +106,7 @@ impl Runner {
             match op.exec(&mut comm)? {
                 OpReport::Success => {}
                 OpReport::Failure { error_message } => {
-                    Self::save_to_file("Ошибки", &format!("{}\n{}", &comm.history, &error_message));
+                    save_to_file("Ошибки", &format!("{}\n{}", &comm.history, &error_message));
 
                     return Ok(TestReport::Failure {
                         history: comm.history,
@@ -179,7 +126,7 @@ impl Runner {
             CommReport::NonEmptyStdout(history) => {
                 let error_message = "Программа вывела лишние данные";
 
-                Self::save_to_file("Ошибки", &format!("{}\n{}", &history, &error_message));
+                save_to_file("Ошибки", &format!("{}\n{}", &history, &error_message));
                 Ok(TestReport::Failure {
                     history,
                     error_message: error_message.to_string(),
@@ -195,15 +142,15 @@ impl Runner {
             }
         }
     }
+}
 
-    fn save_to_file(file_prefix: &str, contents: &str) {
-        let date = time::OffsetDateTime::now_utc();
+fn save_to_file(file_prefix: &str, contents: &str) {
+    let date = time::OffsetDateTime::now_utc();
 
-        let file_name = format!("{} {}.txt", file_prefix, date.format(&DATE_FORMAT).unwrap());
+    let file_name = format!("{} {}.txt", file_prefix, date.format(&DATE_FORMAT).unwrap());
 
-        if fs::write(file_name, contents).is_err() {
-            eprintln!("Не удалось сохранить данные в файл!");
-        }
+    if fs::write(file_name, contents).is_err() {
+        eprintln!("Не удалось сохранить данные в файл!");
     }
 }
 
@@ -214,6 +161,28 @@ pub trait Rule: Debug {
 
     fn validate(&self, text: &BString) -> OpReport;
     fn generate(&self) -> BString;
+}
+
+impl RuleData {
+    fn to_rule(&self) -> anyhow::Result<Box<dyn Rule>> {
+        match self.content_type {
+            ContentType::PlainText => PlainText::parse(&self.text).map(|rule| {
+                let boxed: Box<dyn Rule> = Box::new(rule);
+
+                boxed
+            }),
+            ContentType::Regex => RegExpr::parse(&self.text).map(|rule| {
+                let boxed: Box<dyn Rule> = Box::new(rule);
+
+                boxed
+            }),
+            ContentType::IntRanges => IntRanges::parse(&self.text).map(|rule| {
+                let boxed: Box<dyn Rule> = Box::new(rule);
+
+                boxed
+            }),
+        }
+    }
 }
 
 #[derive(Debug)]
