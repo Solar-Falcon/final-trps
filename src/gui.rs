@@ -73,21 +73,23 @@ impl UiRulePanel {
     }
 
     fn display(&mut self, ui: &mut egui::Ui) {
-        self.display_rule_creation(ui);
-
-        ui.separator();
-
         ui.horizontal(|ui| {
-            self.display_main_panel(ui);
+            ui.vertical(|ui| {
+                self.display_rule_creation(ui);
+            });
 
             ui.separator();
 
             self.display_rule_list(ui);
         });
+
+        ui.separator();
+        
+        self.display_main_panel(ui);
     }
 
     fn display_rule_creation(&mut self, ui: &mut egui::Ui) {
-        egui::ComboBox::from_label("Список правил").show_index(
+        egui::ComboBox::from_label("Список правил").width(250.0).show_index(
             ui,
             &mut self.cursor,
             self.rules.len(),
@@ -99,23 +101,21 @@ impl UiRulePanel {
             },
         );
 
-        ui.horizontal(|ui| {
-            if ui.button("Добавить в конец списка").clicked() {
-                self.rules.push(Default::default());
-                self.cursor = self.rules.len() - 1; // cursor on the new rule
+        if ui.button("Добавить в конец списка").clicked() {
+            self.rules.push(Default::default());
+            self.cursor = self.rules.len() - 1; // cursor on the new rule
+        }
+
+        if !self.rules.is_empty() {
+            if ui.button("Добавить после выбранного").clicked() {
+                self.cursor += 1;
+                self.rules.insert(self.cursor, Default::default());
             }
 
-            if !self.rules.is_empty() {
-                if ui.button("Добавить после выбранного").clicked() {
-                    self.cursor += 1;
-                    self.rules.insert(self.cursor, Default::default());
-                }
-
-                if ui.button("Добавить перед выбранным").clicked() {
-                    self.rules.insert(self.cursor, Default::default());
-                }
+            if ui.button("Добавить перед выбранным").clicked() {
+                self.rules.insert(self.cursor, Default::default());
             }
-        });
+        }
 
         if ui.button("Удалить выбранное правило").clicked() {
             self.rules.remove(self.cursor);
@@ -154,7 +154,8 @@ impl UiRulePanel {
                     );
                 });
 
-                let text_edit = egui::TextEdit::singleline(&mut rule.text).code_editor();
+                // let text_edit = egui::TextEdit::singleline(&mut rule.text).code_editor();
+                let text_edit = egui::TextEdit::singleline(&mut rule.text).code_editor().desired_width(480.0);
 
                 ui.add(text_edit);
             }
