@@ -86,10 +86,7 @@ impl RegExpr {
             HirKind::Alternation(alt) => {
                 Item::AnyOf(alt.iter().map(|it| self.generate_regex_item(it)).collect())
             }
-            HirKind::Look(_) => {
-                eprintln!("Warning: anchors and boundaries in input regexes are useless");
-                Item::Literal(BString::from(""))
-            }
+            HirKind::Look(_) => Item::Literal(BString::from("")),
         }
     }
 }
@@ -257,7 +254,12 @@ impl Rule for IntRanges {
     fn generate(&self) -> BString {
         let mut rng = rand::thread_rng();
 
-        let range = self.ranges.choose_weighted(&mut rng, |range| (range.end().wrapping_sub(*range.start()) as u128).saturating_add(1)).unwrap();
+        let range = self
+            .ranges
+            .choose_weighted(&mut rng, |range| {
+                (range.end().wrapping_sub(*range.start()).unsigned_abs() as u128).saturating_add(1)
+            })
+            .unwrap();
         let num = range.clone().choose(&mut rng).unwrap();
 
         BString::new(num.to_string().into())
