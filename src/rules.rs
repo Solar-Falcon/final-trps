@@ -213,7 +213,7 @@ impl IntRanges {
                     "Ошибка при обработке диапазонов чисел: {}\n{}\n{}^",
                     err.to_string(),
                     line,
-                    "\u{2002}".repeat(offset),
+                    "  ".repeat(offset),
                 )))
             }
         }
@@ -249,7 +249,7 @@ impl Rule for IntRanges {
             })
         } else {
             Err(anyhow::Error::msg(
-                "Ошибка при парсинге диапазонов чисел: текстовое поле пустое",
+                "Ошибка при обработке диапазонов чисел: текстовое поле пустое",
             ))
         }
     }
@@ -257,13 +257,8 @@ impl Rule for IntRanges {
     fn generate(&self) -> BString {
         let mut rng = rand::thread_rng();
 
-        let num = self
-            .ranges
-            .iter()
-            .cloned()
-            .flatten()
-            .choose(&mut rng)
-            .unwrap();
+        let range = self.ranges.choose_weighted(&mut rng, |range| (range.end().wrapping_sub(*range.start()) as u128).saturating_add(1)).unwrap();
+        let num = range.clone().choose(&mut rng).unwrap();
 
         BString::new(num.to_string().into())
     }
