@@ -180,12 +180,18 @@ impl Runner {
                 let error_message = "Программа вывела лишние данные";
 
                 Self::save_to_file("Ошибки", &format!("{}\n{}", &history, &error_message));
-                Ok(TestReport::Failure { history, error_message: error_message.to_string() })
+                Ok(TestReport::Failure {
+                    history,
+                    error_message: error_message.to_string(),
+                })
             }
             CommReport::ProgramError(history, stderr) => {
                 let error_message = format!("Программа не была успешно завершена:\n{}", stderr);
 
-                Ok(TestReport::Failure { history, error_message })
+                Ok(TestReport::Failure {
+                    history,
+                    error_message,
+                })
             }
         }
     }

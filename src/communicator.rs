@@ -49,11 +49,16 @@ impl Communicator {
         let mut process = command.spawn()?;
 
         Ok(Self {
-            reader: BufReader::new(process
-                .stdout
+            reader: BufReader::new(
+                process
+                    .stdout
+                    .take()
+                    .ok_or(Error::msg("program stdout unavailable"))?,
+            ),
+            writer: process
+                .stdin
                 .take()
-                .ok_or(Error::msg("program stdout unavailable"))?),
-            writer: process.stdin.take().ok_or(Error::msg("program stdin unavailable"))?,
+                .ok_or(Error::msg("program stdin unavailable"))?,
             process,
             history: History { items: Vec::new() },
         })
@@ -84,7 +89,9 @@ impl Communicator {
         let stdout_empty;
         if !output.stdout.is_empty() {
             stdout_empty = false;
-            self.history.items.push(Item::Stdout(BString::new(output.stdout)));
+            self.history
+                .items
+                .push(Item::Stdout(BString::new(output.stdout)));
         } else {
             stdout_empty = true;
         }

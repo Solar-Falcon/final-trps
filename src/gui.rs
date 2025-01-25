@@ -1,4 +1,4 @@
-use crate::runner::{RuleType, RuleData, ContentType, Runner, TestReport, TestingData};
+use crate::runner::{ContentType, RuleData, RuleType, Runner, TestReport, TestingData};
 use anyhow::Result;
 use eframe::{
     egui::{self, Color32},
@@ -147,7 +147,11 @@ impl UiRulePanel {
                         ContentType::Regex,
                         "Регулярное выражение",
                     );
-                    ui.radio_value(&mut rule.content_type, ContentType::IntRanges, "Целые числа");
+                    ui.radio_value(
+                        &mut rule.content_type,
+                        ContentType::IntRanges,
+                        "Целые числа",
+                    );
                 });
 
                 let text_edit = egui::TextEdit::singleline(&mut rule.text).code_editor();

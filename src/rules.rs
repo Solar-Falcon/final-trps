@@ -189,7 +189,7 @@ impl Item<'_> {
 
 #[derive(Debug)]
 pub struct IntRanges {
-    ranges: Vec<RangeInclusive<i128>>,
+    ranges: Vec<RangeInclusive<i64>>,
     orig_text: String,
 }
 
@@ -203,7 +203,7 @@ impl IntRanges {
     }
 
     #[inline]
-    fn parse_int(s: &str, line: &str) -> anyhow::Result<i128> {
+    fn parse_int(s: &str, line: &str) -> anyhow::Result<i64> {
         match s.parse() {
             Ok(num) => Ok(num),
             Err(err) => {
