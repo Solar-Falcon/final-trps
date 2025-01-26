@@ -60,7 +60,7 @@ impl RegExpr {
         )
     }
 
-    fn generate_regex_item<'a>(&self, hir: &'a Hir) -> Item<'a> {
+    fn generate_regex_item(hir: &Hir) -> Item {
         match hir.kind() {
             HirKind::Empty => Item::Literal(BString::from("")),
             HirKind::Literal(lit) => Item::Literal(lit.0.to_vec().into()),
@@ -69,7 +69,7 @@ impl RegExpr {
                 Class::Unicode(unic) => Item::CharChoice(unic),
             },
             HirKind::Repetition(rep) => {
-                let item = self.generate_regex_item(&rep.sub);
+                let item = Self::generate_regex_item(&rep.sub);
                 let range = match (rep.min, rep.max) {
                     (0, None) => 0..=40, // the `*`
                     (1, None) => 1..=40, // the `+`
@@ -79,12 +79,10 @@ impl RegExpr {
 
                 Item::Repeat(Box::new(item), range)
             }
-            HirKind::Capture(cap) => self.generate_regex_item(&cap.sub),
-            HirKind::Concat(cat) => {
-                Item::Seq(cat.iter().map(|it| self.generate_regex_item(it)).collect())
-            }
+            HirKind::Capture(cap) => Self::generate_regex_item(&cap.sub),
+            HirKind::Concat(cat) => Item::Seq(cat.iter().map(Self::generate_regex_item).collect()),
             HirKind::Alternation(alt) => {
-                Item::AnyOf(alt.iter().map(|it| self.generate_regex_item(it)).collect())
+                Item::AnyOf(alt.iter().map(Self::generate_regex_item).collect())
             }
             HirKind::Look(_) => Item::Literal(BString::from("")),
         }
@@ -113,8 +111,7 @@ impl Rule for RegExpr {
         let mut rng = rand::thread_rng();
         let mut result = BString::from("");
 
-        self.generate_regex_item(&self.syntax)
-            .append_to(&mut result, &mut rng);
+        Self::generate_regex_item(&self.syntax).append_to(&mut result, &mut rng);
 
         result
     }
@@ -208,7 +205,7 @@ impl IntRanges {
 
                 Err(anyhow::Error::msg(format!(
                     "Ошибка при обработке диапазонов чисел: {}\n{}\n{}^",
-                    err.to_string(),
+                    err,
                     line,
                     "  ".repeat(offset),
                 )))
