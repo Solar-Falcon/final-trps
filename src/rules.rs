@@ -1,4 +1,4 @@
-use crate::worker_thread::{OpReport, Rule};
+use crate::worker_thread::OpReport;
 use bstr::{BString, ByteSlice, ByteVec};
 use rand::{
     rngs::ThreadRng,
@@ -7,7 +7,16 @@ use rand::{
 };
 use regex::bytes::Regex;
 use regex_syntax::hir::{Class, ClassBytes, ClassUnicode, Hir, HirKind};
-use std::ops::RangeInclusive;
+use std::{fmt::Debug, ops::RangeInclusive};
+
+pub trait Rule: Debug {
+    fn parse(text: &str) -> anyhow::Result<Self>
+    where
+        Self: Sized;
+
+    fn validate(&self, text: &BString) -> OpReport;
+    fn generate(&self) -> BString;
+}
 
 #[derive(Debug)]
 pub struct PlainText(String);

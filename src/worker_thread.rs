@@ -1,11 +1,10 @@
 use crate::{
     communicator::{CommReport, Communicator, History},
     gui::{ContentType, RuleData, RuleType},
-    rules::{IntRanges, PlainText, RegExpr},
+    rules::{IntRanges, PlainText, RegExpr, Rule},
     run_manager::SharedRunnerState,
     DATE_FORMAT,
 };
-use bstr::BString;
 use std::{
     fmt::Debug,
     fs,
@@ -152,15 +151,6 @@ fn save_to_file(file_prefix: &str, contents: &str) {
     if fs::write(file_name, contents).is_err() {
         eprintln!("Не удалось сохранить данные в файл!");
     }
-}
-
-pub trait Rule: Debug {
-    fn parse(text: &str) -> anyhow::Result<Self>
-    where
-        Self: Sized;
-
-    fn validate(&self, text: &BString) -> OpReport;
-    fn generate(&self) -> BString;
 }
 
 impl RuleData {
