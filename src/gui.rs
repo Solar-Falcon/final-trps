@@ -76,9 +76,10 @@ impl AppGui {
             ui.add(slider);
 
             match self.state {
-                AppState::Idle => {
+                AppState::Idle if self.ui_rule_panel.rules().len() > 0 => {
                     self.ui_start_button(ui);
                 }
+                AppState::Idle => {}
                 AppState::Working => {
                     self.ui_footer_working(ui);
                 }
