@@ -76,7 +76,7 @@ impl AppGui {
             ui.add(slider);
 
             match self.state {
-                AppState::Idle if self.ui_rule_panel.rules().len() > 0 => {
+                AppState::Idle if !self.ui_rule_panel.rules().is_empty() => {
                     self.ui_start_button(ui);
                 }
                 AppState::Idle => {}
