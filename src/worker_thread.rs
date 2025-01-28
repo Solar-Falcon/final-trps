@@ -128,7 +128,7 @@ impl Runner {
                 save_to_file("Ошибки", &format!("{}\n{}", &history, &error_message));
                 Ok(TestReport::Failure {
                     history,
-                    error_message: error_message.to_string(),
+                    error_message: error_message.to_owned(),
                 })
             }
             CommReport::ProgramError(history, stderr) => {

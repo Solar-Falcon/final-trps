@@ -19,12 +19,14 @@ pub trait Rule: Debug {
 }
 
 #[derive(Debug)]
-pub struct PlainText(String);
+pub struct PlainText {
+    text: String,
+}
 
 impl PlainText {
     #[inline]
     fn failure_msg(&self) -> String {
-        format!("Ожидаемый вывод: \"{}\"", self.0.escape_debug())
+        format!("Ожидаемый вывод: \"{}\"", self.text.escape_debug())
     }
 }
 
@@ -34,17 +36,19 @@ impl Rule for PlainText {
     where
         Self: Sized,
     {
-        Ok(Self(text.to_owned()))
+        Ok(Self {
+            text: text.to_owned(),
+        })
     }
 
     #[inline]
     fn generate(&self) -> BString {
-        BString::from(self.0.as_str())
+        BString::from(self.text.as_str())
     }
 
     #[inline]
     fn validate(&self, text: &BString) -> OpReport {
-        if self.0.as_bytes() == text.as_slice() {
+        if self.text.as_bytes() == text.as_slice() {
             OpReport::Success
         } else {
             OpReport::Failure {
