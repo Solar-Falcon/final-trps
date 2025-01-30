@@ -5,7 +5,7 @@ use rand::{
     seq::{IteratorRandom, SliceRandom},
     Rng,
 };
-use regex::bytes::Regex;
+use regex::bytes::{Regex, RegexBuilder};
 use regex_syntax::hir::{Class, ClassBytes, ClassUnicode, Hir, HirKind};
 use std::{fmt::Debug, ops::RangeInclusive};
 
@@ -108,14 +108,22 @@ impl Rule for RegExpr {
     where
         Self: Sized,
     {
+        let unicode = true;
+        let ignore_ws = false;
+        let multi_line = false;
+
         let syntax = regex_syntax::ParserBuilder::new()
-            .ignore_whitespace(true)
-            .multi_line(false)
-            .unicode(true)
+            .ignore_whitespace(ignore_ws)
+            .multi_line(multi_line)
+            .unicode(unicode)
             .build()
             .parse(text)?;
 
-        let regex = Regex::new(text)?;
+        let regex = RegexBuilder::new(text)
+            .ignore_whitespace(ignore_ws)
+            .multi_line(multi_line)
+            .unicode(unicode)
+            .build()?;
 
         Ok(Self { regex, syntax })
     }
@@ -240,6 +248,10 @@ impl Rule for IntRanges {
                     let start = Self::parse_int(start.trim(), line)?;
                     let end = Self::parse_int(end.trim(), line)?;
 
+                    if start > end {
+                        anyhow::bail!("Ошибка при обработке диапазонов чисел: начало диапазона больше, чем конец ({}..{})", start, end);
+                    }
+
                     ranges.push(start..=end);
                 } else {
                     let num = Self::parse_int(elem.trim(), line)?;
@@ -293,5 +305,215 @@ impl Rule for IntRanges {
                 ),
             },
         }
+    }
+}
+
+//===================================================================================//
+//===================================// TESTING //===================================//
+//===================================================================================//
+
+#[cfg(test)]
+mod test_int_parsing {
+    use super::{IntRanges, Rule};
+    use rand::Rng;
+    use std::ops::RangeInclusive;
+
+    fn check(input: &str, ranges: &[RangeInclusive<i64>]) -> anyhow::Result<()> {
+        match IntRanges::parse(input) {
+            Ok(int_ranges) => {
+                if int_ranges.orig_text != input {
+                    Err(anyhow::format_err!("text doesn't match"))
+                } else if int_ranges.ranges != ranges {
+                    Err(anyhow::format_err!("ranges don't match"))
+                } else {
+                    Ok(())
+                }
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    #[inline]
+    fn ok(input: &str, ranges: &[RangeInclusive<i64>]) {
+        match check(input, ranges) {
+            Ok(()) => {}
+            Err(err) => panic!("{err}"),
+        }
+    }
+
+    #[inline]
+    fn err(input: &str) {
+        assert!(check(input, &[]).is_err());
+    }
+
+    #[test]
+    fn empty() {
+        err("");
+    }
+
+    #[test]
+    fn single_comma() {
+        err(",");
+    }
+
+    #[test]
+    fn some_text() {
+        err("sungoua9180_");
+    }
+
+    #[test]
+    fn single_number() {
+        ok("100", &[100..=100]);
+    }
+
+    #[test]
+    fn single_number_with_text() {
+        err("100nan");
+    }
+
+    #[test]
+    fn single_number_negative() {
+        ok("-190583", &[-190583..=-190583]);
+    }
+
+    #[test]
+    fn single_number_zero() {
+        ok("0", &[0..=0]);
+    }
+
+    #[test]
+    fn single_number_trailing_comma() {
+        err("14391539,");
+    }
+
+    #[test]
+    fn single_number_negative_separated_minus() {
+        err("- 1");
+    }
+
+    #[test]
+    fn single_number_with_spaces() {
+        ok("   \t\t 10190309\t\t\t", &[10190309..=10190309]);
+    }
+
+    #[test]
+    fn single_range() {
+        ok("-123..-0", &[-123..=0]);
+    }
+
+    #[test]
+    fn single_range_end_less_than_start() {
+        err("123159..-9148");
+    }
+
+    #[test]
+    fn single_range_trailing_comma() {
+        err("149..150,");
+    }
+
+    #[test]
+    fn single_range_half() {
+        err("140..");
+    }
+
+    #[test]
+    fn single_range_other_half() {
+        err("..149");
+    }
+
+    #[test]
+    fn single_range_with_spaces() {
+        ok("  \t 149 \t\t..\t\t150                ", &[149..=150]);
+    }
+
+    #[test]
+    fn multi_number() {
+        ok(
+            " 194 , 99     ,-150,   11037    ",
+            &[194..=194, 99..=99, -150..=-150, 11037..=11037],
+        );
+    }
+
+    #[test]
+    fn multi_number_double_comma() {
+        err("1,,2");
+    }
+
+    #[test]
+    fn multi_number_with_text() {
+        err(" 194, 99, -150, 11037, what is this?");
+    }
+
+    #[test]
+    fn multi_ranges() {
+        ok(
+            "  -111111111 .. -1 ,-100..1000,1   ..   1,   -0..0",
+            &[-111111111..=-1, -100..=1000, 1..=1, 0..=0],
+        );
+    }
+
+    #[test]
+    fn multi_mix() {
+        ok(
+            " 99 , -111 .. -1 ,1   ..   1,   -0..0   ,-150    ",
+            &[99..=99, -111..=-1, 1..=1, 0..=0, -150..=-150],
+        );
+    }
+
+    #[test]
+    fn proptest() {
+        let mut rng = rand::thread_rng();
+
+        let len: usize = rng.gen_range(1..100);
+        let mut ranges = Vec::with_capacity(len);
+
+        for _i in 0..len {
+            let start: i64 = rng.gen();
+            let end: i64 = rng.gen_range(start..=i64::MAX);
+
+            ranges.push(start..=end);
+        }
+
+        let input = ranges
+            .iter()
+            .map(|range| {
+                let start = range.start();
+                let end = range.end();
+
+                let sep = " ".repeat(rng.gen_range(0..10));
+
+                format!("{sep}{start}{sep}..{sep}{end}{sep}")
+            })
+            .collect::<Vec<_>>()
+            .join(",");
+
+        ok(&input, &ranges);
+    }
+}
+
+#[cfg(test)]
+mod test_regex_generation {
+    use super::{RegExpr, Rule};
+    use crate::worker_thread::OpReport;
+
+    fn check(input: &str) {
+        let regex = RegExpr::parse(input).unwrap();
+
+        let generated = regex.generate();
+
+        match regex.validate(&generated) {
+            OpReport::Success => {}
+            OpReport::Failure { error_message } => panic!("{error_message} : {generated}"),
+        }
+    }
+
+    #[test]
+    fn simple_regex() {
+        check(r"^\w+$");
+    }
+
+    #[test]
+    fn slightly_complex_regex() {
+        check(r"^[0-9]{0,15} \s*\S*888[\w\(\)]?$")
     }
 }
