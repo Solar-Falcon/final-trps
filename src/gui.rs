@@ -1,7 +1,4 @@
-use crate::{
-    run_manager::RunManager,
-    worker_thread::{TestReport, TestingData},
-};
+use crate::run_manager::{RunManager, TestReport, TestingData};
 use anyhow::Result;
 use eframe::{
     egui::{self, Color32},

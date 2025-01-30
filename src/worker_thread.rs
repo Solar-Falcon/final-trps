@@ -1,14 +1,13 @@
 use crate::{
-    communicator::{CommReport, Communicator, History},
+    communicator::{CommReport, Communicator},
     gui::{ContentType, RuleData, RuleType},
     rules::{IntRanges, PlainText, RegExpr, Rule},
-    run_manager::SharedRunnerState,
+    run_manager::{SharedRunnerState, TestReport, TestingData},
     DATE_FORMAT,
 };
 use std::{
     fmt::Debug,
     fs,
-    path::PathBuf,
     process::{Command, Stdio},
     sync::{
         atomic::Ordering,
@@ -17,13 +16,6 @@ use std::{
     },
     thread,
 };
-
-#[derive(Debug)]
-pub struct TestingData {
-    pub program_path: PathBuf,
-    pub rules: Vec<RuleData>,
-    pub successes_required: u32,
-}
 
 #[derive(Debug)]
 pub struct Runner {
@@ -217,24 +209,4 @@ impl Operation {
 pub enum OpReport {
     Success,
     Failure { error_message: String },
-}
-
-#[derive(Debug)]
-pub enum TestReport {
-    Success,
-    Failure {
-        history: History,
-        error_message: String,
-    },
-    Error(anyhow::Error),
-}
-
-impl From<anyhow::Result<Self>> for TestReport {
-    #[inline]
-    fn from(value: anyhow::Result<Self>) -> Self {
-        match value {
-            Ok(this) => this,
-            Err(error) => Self::Error(error),
-        }
-    }
 }

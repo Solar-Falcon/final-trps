@@ -1,23 +1,12 @@
-use crate::worker_thread::{Runner, TestReport, TestingData};
-use std::sync::{
-    atomic::{AtomicU32, Ordering},
-    mpsc::{self, Receiver, SyncSender},
-    Arc,
+use crate::{communicator::History, gui::RuleData, worker_thread::Runner};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        mpsc::{self, Receiver, SyncSender},
+        Arc,
+    },
 };
-
-#[derive(Debug, Default)]
-pub struct SharedRunnerState {
-    pub solved_tests: AtomicU32,
-    pub required_tests: AtomicU32,
-}
-
-impl SharedRunnerState {
-    #[inline]
-    pub fn reset(&self) {
-        self.solved_tests.store(0, Ordering::Release);
-        self.required_tests.store(0, Ordering::Release);
-    }
-}
 
 #[derive(Debug)]
 pub struct RunManager {
@@ -86,6 +75,47 @@ impl RunManager {
                 None
             }
             Err(mpsc::TryRecvError::Empty) => Some(false),
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub struct SharedRunnerState {
+    pub solved_tests: AtomicU32,
+    pub required_tests: AtomicU32,
+}
+
+impl SharedRunnerState {
+    #[inline]
+    pub fn reset(&self) {
+        self.solved_tests.store(0, Ordering::Release);
+        self.required_tests.store(0, Ordering::Release);
+    }
+}
+
+#[derive(Debug)]
+pub struct TestingData {
+    pub program_path: PathBuf,
+    pub rules: Vec<RuleData>,
+    pub successes_required: u32,
+}
+
+#[derive(Debug)]
+pub enum TestReport {
+    Success,
+    Failure {
+        history: History,
+        error_message: String,
+    },
+    Error(anyhow::Error),
+}
+
+impl From<anyhow::Result<Self>> for TestReport {
+    #[inline]
+    fn from(value: anyhow::Result<Self>) -> Self {
+        match value {
+            Ok(this) => this,
+            Err(error) => Self::Error(error),
         }
     }
 }
