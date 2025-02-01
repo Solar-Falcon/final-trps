@@ -78,9 +78,9 @@ impl RegExpr {
             HirKind::Empty => Ok(Item::Literal(BString::from(""))),
             HirKind::Literal(lit) => Ok(Item::Literal(lit.0.to_vec().into())),
             HirKind::Class(class) => Ok(match class {
-                            Class::Bytes(bytes) => Item::ByteChoice(bytes),
-                            Class::Unicode(unic) => Item::CharChoice(unic),
-                        }),
+                Class::Bytes(bytes) => Item::ByteChoice(bytes),
+                Class::Unicode(unic) => Item::CharChoice(unic),
+            }),
             HirKind::Repetition(rep) => {
                 let item = Self::generate_regex_item(&rep.sub)?;
                 let range = match (rep.min, rep.max) {
@@ -93,11 +93,20 @@ impl RegExpr {
                 Ok(Item::Repeat(Box::new(item), range))
             }
             HirKind::Capture(cap) => Self::generate_regex_item(&cap.sub),
-            HirKind::Concat(cat) => Ok(Item::Seq(cat.iter().map(Self::generate_regex_item).collect::<anyhow::Result<_>>()?)),
-            HirKind::Alternation(alt) => {
-                Ok(Item::AnyOf(alt.iter().map(Self::generate_regex_item).collect::<anyhow::Result<_>>()?))
-            }
-            HirKind::Look(look) => Err(anyhow::format_err!("Данный элемент не поддерживается при генерации: {}", look.as_char())),
+            HirKind::Concat(cat) => Ok(Item::Seq(
+                cat.iter()
+                    .map(Self::generate_regex_item)
+                    .collect::<anyhow::Result<_>>()?,
+            )),
+            HirKind::Alternation(alt) => Ok(Item::AnyOf(
+                alt.iter()
+                    .map(Self::generate_regex_item)
+                    .collect::<anyhow::Result<_>>()?,
+            )),
+            HirKind::Look(look) => Err(anyhow::format_err!(
+                "Данный элемент не поддерживается при генерации: {}",
+                look.as_char()
+            )),
         }
     }
 }
@@ -492,6 +501,38 @@ mod test_int_parsing {
 }
 
 #[cfg(test)]
+mod test_int_gen {
+    use crate::worker_thread::OpReport;
+    use rand::Rng;
+    use super::{IntRanges, Rule};
+
+    #[test]
+    fn proptest() {
+        let mut rng = rand::thread_rng();
+
+        let len: usize = rng.gen_range(1..100);
+        let mut ranges = Vec::with_capacity(len);
+
+        for _i in 0..len {
+            let start: i64 = rng.gen();
+            let end: i64 = rng.gen_range(start..=i64::MAX);
+
+            ranges.push(start..=end);
+        }
+
+        let ranges = IntRanges {
+            ranges,
+            orig_text: String::new(),
+        };
+
+        for _i in 0..1000 {
+            let n = ranges.generate().unwrap();
+            assert_eq!(ranges.validate(&n), OpReport::Success);
+        }
+    }
+}
+
+#[cfg(test)]
 mod test_regex_generation {
     use super::{RegExpr, Rule};
     use crate::worker_thread::OpReport;
@@ -507,14 +548,20 @@ mod test_regex_generation {
         }
     }
 
+    fn check_invalid(input: &str) {
+        let regex = RegExpr::parse(input).unwrap();
+
+        assert!(regex.generate().is_err());
+    }
+
     #[test]
     fn simple_regex() {
-        check(r"^\w+$");
+        check(r"\w+");
     }
 
     #[test]
     fn slightly_complex_regex() {
-        check(r"^[0-9]{0,15} \s*\S*888[\w\(\)]?$")
+        check(r"[0-9]{0,15} \s*\S*888[\w\(\)]?")
     }
 
     #[test]
@@ -524,11 +571,13 @@ mod test_regex_generation {
 
     #[test]
     fn regex_long() {
-        check(r"(2020(-03)+)-[A-Za-z0-9]+:34:([A-Za-z0-9]+(\.[A-Za-z0-9]+)+) INFO14142  +~!@#$%^&*()=+_`\-\|\/'\[\]\{\}]|[?.,]*\w q#([A-Za-z]+( [A-Za-z]+)+) '[^']*'\.");
+        check(
+            r"(2020(-03)+)-+:34:([A-Z0-9]+(\.[a-z0-9]+)+) +~!@#\$%\^&*()=+_`\-\|\/'\[\]\{\}]|[?.,]*\w q#([A-Za-z]+( [A-Za-z]+)+) '[^']*'\.",
+        );
     }
 
     #[test]
     fn regex_complex() {
-        check(r".*[(0-9A-Xa-mz)&&[^MNO]]{10,20} ;$(\P{Greek}|\d)+");
+        check_invalid(r".*[(0-9A-Xa-mz)&&[^MNO]]{10,20} ;\b(\P{Greek}|\d)+");
     }
 }

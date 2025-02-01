@@ -205,7 +205,7 @@ impl Operation {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum OpReport {
     Success,
     Failure { error_message: String },
