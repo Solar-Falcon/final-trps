@@ -502,9 +502,9 @@ mod test_int_parsing {
 
 #[cfg(test)]
 mod test_int_gen {
+    use super::{IntRanges, Rule};
     use crate::worker_thread::OpReport;
     use rand::Rng;
-    use super::{IntRanges, Rule};
 
     #[test]
     fn proptest() {

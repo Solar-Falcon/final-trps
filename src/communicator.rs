@@ -68,7 +68,7 @@ impl Communicator {
         let mut buffer = Vec::new();
         self.reader.read_until(b'\n', &mut buffer)?;
 
-        let string = BString::from(buffer.as_bstr().trim_end());
+        let string = BString::from(buffer.as_bstr().trim_end_with(|b| b == '\n'));
         self.history.items.push(Item::Stdout(string.clone()));
 
         Ok(string)
