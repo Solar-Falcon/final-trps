@@ -190,7 +190,7 @@ impl Operation {
     fn exec(&self, comm: &mut Communicator) -> anyhow::Result<OpReport> {
         match self {
             Self::Input(rule) => {
-                let string = rule.generate();
+                let string = rule.generate()?;
 
                 comm.write_line(string)?;
 

@@ -15,7 +15,7 @@ pub trait Rule: Debug {
         Self: Sized;
 
     fn validate(&self, text: &BString) -> OpReport;
-    fn generate(&self) -> BString;
+    fn generate(&self) -> anyhow::Result<BString>;
 }
 
 #[derive(Debug)]
@@ -42,8 +42,8 @@ impl Rule for PlainText {
     }
 
     #[inline]
-    fn generate(&self) -> BString {
-        BString::from(self.text.as_str())
+    fn generate(&self) -> anyhow::Result<BString> {
+        Ok(BString::from(self.text.as_str()))
     }
 
     #[inline]
@@ -73,16 +73,16 @@ impl RegExpr {
         )
     }
 
-    fn generate_regex_item(hir: &Hir) -> Item {
+    fn generate_regex_item(hir: &Hir) -> anyhow::Result<Item> {
         match hir.kind() {
-            HirKind::Empty => Item::Literal(BString::from("")),
-            HirKind::Literal(lit) => Item::Literal(lit.0.to_vec().into()),
-            HirKind::Class(class) => match class {
-                Class::Bytes(bytes) => Item::ByteChoice(bytes),
-                Class::Unicode(unic) => Item::CharChoice(unic),
-            },
+            HirKind::Empty => Ok(Item::Literal(BString::from(""))),
+            HirKind::Literal(lit) => Ok(Item::Literal(lit.0.to_vec().into())),
+            HirKind::Class(class) => Ok(match class {
+                            Class::Bytes(bytes) => Item::ByteChoice(bytes),
+                            Class::Unicode(unic) => Item::CharChoice(unic),
+                        }),
             HirKind::Repetition(rep) => {
-                let item = Self::generate_regex_item(&rep.sub);
+                let item = Self::generate_regex_item(&rep.sub)?;
                 let range = match (rep.min, rep.max) {
                     (0, None) => 0..=40, // the `*`
                     (1, None) => 1..=40, // the `+`
@@ -90,14 +90,14 @@ impl RegExpr {
                     (min, Some(max)) => min..=max,
                 };
 
-                Item::Repeat(Box::new(item), range)
+                Ok(Item::Repeat(Box::new(item), range))
             }
             HirKind::Capture(cap) => Self::generate_regex_item(&cap.sub),
-            HirKind::Concat(cat) => Item::Seq(cat.iter().map(Self::generate_regex_item).collect()),
+            HirKind::Concat(cat) => Ok(Item::Seq(cat.iter().map(Self::generate_regex_item).collect::<anyhow::Result<_>>()?)),
             HirKind::Alternation(alt) => {
-                Item::AnyOf(alt.iter().map(Self::generate_regex_item).collect())
+                Ok(Item::AnyOf(alt.iter().map(Self::generate_regex_item).collect::<anyhow::Result<_>>()?))
             }
-            HirKind::Look(_) => Item::Literal(BString::from("")),
+            HirKind::Look(look) => Err(anyhow::format_err!("Данный элемент не поддерживается при генерации: {}", look.as_char())),
         }
     }
 }
@@ -128,13 +128,13 @@ impl Rule for RegExpr {
         Ok(Self { regex, syntax })
     }
 
-    fn generate(&self) -> BString {
+    fn generate(&self) -> anyhow::Result<BString> {
         let mut rng = rand::thread_rng();
         let mut result = BString::from("");
 
-        Self::generate_regex_item(&self.syntax).append_to(&mut result, &mut rng);
+        Self::generate_regex_item(&self.syntax)?.append_to(&mut result, &mut rng);
 
-        result
+        Ok(result)
     }
 
     #[inline]
@@ -273,7 +273,7 @@ impl Rule for IntRanges {
         }
     }
 
-    fn generate(&self) -> BString {
+    fn generate(&self) -> anyhow::Result<BString> {
         let mut rng = rand::thread_rng();
 
         let range = self
@@ -284,7 +284,7 @@ impl Rule for IntRanges {
             .unwrap();
         let num = range.clone().choose(&mut rng).unwrap();
 
-        BString::new(num.to_string().into())
+        Ok(BString::new(num.to_string().into()))
     }
 
     fn validate(&self, text: &BString) -> OpReport {
@@ -499,7 +499,7 @@ mod test_regex_generation {
     fn check(input: &str) {
         let regex = RegExpr::parse(input).unwrap();
 
-        let generated = regex.generate();
+        let generated = regex.generate().unwrap();
 
         match regex.validate(&generated) {
             OpReport::Success => {}
@@ -515,5 +515,20 @@ mod test_regex_generation {
     #[test]
     fn slightly_complex_regex() {
         check(r"^[0-9]{0,15} \s*\S*888[\w\(\)]?$")
+    }
+
+    #[test]
+    fn regex_without_anchors() {
+        check(r"\W+I!?(\\\d)* @/\[\p{Greek}  ");
+    }
+
+    #[test]
+    fn regex_long() {
+        check(r"(2020(-03)+)-[A-Za-z0-9]+:34:([A-Za-z0-9]+(\.[A-Za-z0-9]+)+) INFO14142  +~!@#$%^&*()=+_`\-\|\/'\[\]\{\}]|[?.,]*\w q#([A-Za-z]+( [A-Za-z]+)+) '[^']*'\.");
+    }
+
+    #[test]
+    fn regex_complex() {
+        check(r".*[(0-9A-Xa-mz)&&[^MNO]]{10,20} ;$(\P{Greek}|\d)+");
     }
 }
