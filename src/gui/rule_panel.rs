@@ -24,11 +24,6 @@ impl UiRulePanel {
         self.display_main_panel(ui);
     }
 
-    #[inline]
-    pub fn rules(&self) -> &Vec<RuleData> {
-        &self.rules
-    }
-
     fn display_rule_creation(&mut self, ui: &mut egui::Ui) {
         egui::ComboBox::from_label("Список правил")
             .width(250.0)
@@ -153,5 +148,10 @@ impl UiRulePanel {
             .cursor
             .saturating_add(1)
             .min(self.rules.len().saturating_sub(1));
+    }
+
+    #[inline]
+    pub fn rules(&self) -> &Vec<RuleData> {
+        &self.rules
     }
 }
